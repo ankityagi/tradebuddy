@@ -1,10 +1,15 @@
+import React from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { TradesTable } from './ui/TradesTable';
+import { TradeForm } from './ui/TradeForm';
 import { PastePanel } from './ui/PastePanel';
 
 function Navigation() {
   const location = useLocation();
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => {
+    return location.pathname === path;
+  };
 
   return (
     <nav className="bg-blue-600 text-white shadow-lg">
@@ -20,6 +25,14 @@ function Navigation() {
                 }`}
               >
                 My Trades
+              </Link>
+              <Link
+                to="/new"
+                className={`px-4 py-2 rounded transition-colors ${
+                  isActive('/new') ? 'bg-blue-700 font-semibold' : 'hover:bg-blue-500'
+                }`}
+              >
+                New Trade
               </Link>
               <Link
                 to="/paste"
@@ -38,28 +51,15 @@ function Navigation() {
   );
 }
 
-function HomePage() {
-  return (
-    <div className="text-center py-16">
-      <h2 className="text-2xl font-bold text-gray-800 mb-4">My Trades</h2>
-      <p className="text-gray-600 mb-8">No trades yet. Paste a broker confirmation to get started.</p>
-      <Link
-        to="/paste"
-        className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-      >
-        Paste Trade Confirmation
-      </Link>
-    </div>
-  );
-}
-
 function AppContent() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       <main className="container mx-auto px-4 py-8">
         <Routes>
-          <Route path="/" element={<HomePage />} />
+          <Route path="/" element={<TradesTable />} />
+          <Route path="/new" element={<TradeForm />} />
+          <Route path="/edit/:id" element={<TradeForm />} />
           <Route path="/paste" element={<PastePanel />} />
         </Routes>
       </main>

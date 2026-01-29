@@ -20,18 +20,30 @@ export type ParsedTrade = {
 };
 
 const MONTHS = {
-  JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6,
-  JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12,
+  JAN: 1,
+  FEB: 2,
+  MAR: 3,
+  APR: 4,
+  MAY: 5,
+  JUN: 6,
+  JUL: 7,
+  AUG: 8,
+  SEP: 9,
+  OCT: 10,
+  NOV: 11,
+  DEC: 12,
 } as const;
 
-function pad2(n: number) { return n < 10 ? `0${n}` : String(n); }
+function pad2(n: number) {
+  return n < 10 ? `0${n}` : String(n);
+}
 
 function toISO(y: number, m: number, d: number): string {
   return `${y}-${pad2(m)}-${pad2(d)}`;
 }
 
 function parseMonthToken(tok: string): number | null {
-  const key = tok.trim().slice(0,3).toUpperCase() as keyof typeof MONTHS;
+  const key = tok.trim().slice(0, 3).toUpperCase() as keyof typeof MONTHS;
   return MONTHS[key] ?? null;
 }
 
@@ -60,7 +72,7 @@ function parseSymbolCode(s: string) {
   const strike = parseInt(strikeRaw, 10);
   return {
     ticker,
-    type: cp === 'C' ? 'call' as const : 'put' as const,
+    type: cp === 'C' ? ('call' as const) : ('put' as const),
     expiry: toISO(year, month, day),
     strike,
   };
@@ -84,7 +96,7 @@ function parseDescriptionLine(s: string) {
   }
   return {
     ticker: tickerM ? tickerM[1] : null,
-    type: typeM ? (typeM[1].toLowerCase() as 'put'|'call') : null,
+    type: typeM ? (typeM[1].toLowerCase() as 'put' | 'call') : null,
     expiry,
     strike: strikeM ? parseFloat(strikeM[1]) : null,
     contractSize: sizeM ? parseInt(sizeM[1], 10) : null,
@@ -160,9 +172,9 @@ export function parseTradeText(raw: string): ParsedTrade[] {
       action: expired ? 'expired' : (action as any),
       openClose: expired ? null : (openClose as any),
       type: (symbolInfo?.type ?? descInfo.type) as any,
-      ticker: (symbolInfo?.ticker ?? descInfo.ticker) ?? null,
-      expiry: (symbolInfo?.expiry ?? descInfo.expiry) ?? null,
-      strike: (symbolInfo?.strike ?? descInfo.strike) ?? null,
+      ticker: symbolInfo?.ticker ?? descInfo.ticker ?? null,
+      expiry: symbolInfo?.expiry ?? descInfo.expiry ?? null,
+      strike: symbolInfo?.strike ?? descInfo.strike ?? null,
       contracts: contracts ?? (expired ? 1 : null),
       contractSize: descInfo.contractSize ?? 100,
       amount: amount ?? null,
@@ -170,14 +182,13 @@ export function parseTradeText(raw: string): ParsedTrade[] {
       price: price ?? null,
       commission: commission ?? null,
       fees: fees ?? null,
-      date: dateLine ?? (expired ? descInfo.expiry ?? symbolInfo?.expiry ?? null : null),
+      date: dateLine ?? (expired ? (descInfo.expiry ?? symbolInfo?.expiry ?? null) : null),
       settlementDate: parseNumberAfterLabel(blk, 'Settlement date') ? parseDateLike(blk) : null,
       symbol: symbolInfo ? (raw.match(/[+-]?[A-Z]{1,6}\d{6}[CP]\d{2,4}/)?.[0] ?? null) : null,
       margin: descInfo.margin || /\bType[\r\n]+Margin\b/i.test(blk) || /\(Margin\)/i.test(blk),
-      account: (blk.match(/\b\*\*\*\d{3,4}\b/)?.[0] ?? null),
+      account: blk.match(/\b\*\*\*\d{3,4}\b/)?.[0] ?? null,
     };
     results.push(parsed);
   }
   return results;
 }
-
