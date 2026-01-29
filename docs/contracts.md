@@ -1,16 +1,21 @@
 # TradeBuddy Contracts and Parser Examples
 
 ## Overview
+
 This doc captures concrete examples for the paste-to-parse feature and the minimal API contracts. It also outlines the parsing heuristics/regex used to extract fields from broker confirmations.
 
 ## Parser Inputs → Parsed JSON
 
 ### Example A — Expired notice
+
 Input
+
 ```
 EXPIRED PUT (IREN) IREN LIMITED COM NPVJAN 16 26 $45 as of Jan-16-2026
 ```
+
 Parsed
+
 ```json
 {
   "action": "expired",
@@ -28,11 +33,15 @@ Parsed
 ```
 
 ### Example B — Full line with margin and size
+
 Input
+
 ```
 PUT (IREN) IREN LIMITED COM NPV JAN 16 26 $45 (100 SHS) (Margin)
 ```
+
 Parsed
+
 ```json
 {
   "action": null,
@@ -50,7 +59,9 @@ Parsed
 ```
 
 ### Example C — Processing block with amount and metadata
+
 Input
+
 ```
 Processing
 Date
@@ -67,7 +78,9 @@ YOU SOLD OPENING TRANSACTION PUT (IREN) IREN LIMITED COM NPVJAN 09 26 $43 (100 S
 +$107.33
 $10,590.38
 ```
+
 Parsed
+
 ```json
 {
   "action": "sell",
@@ -86,12 +99,16 @@ Parsed
   "margin": true
 }
 ```
+
 Notes
+
 - If both a symbol and a description exist, symbol drives expiry/strike, description confirms type and size.
 - If multiple lines contain trades, the parser returns an array of entries.
 
 ### Example D — Detailed ticket with price/fees
+
 Input
+
 ```
 Date
 Jan-05-2026
@@ -114,7 +131,9 @@ $107.33
 Settlement date
 Jan-06-2026
 ```
+
 Parsed
+
 ```json
 {
   "action": "sell",
@@ -186,6 +205,7 @@ Parsed
   - Response: `{ ticker: string, price: number, iv?: number }`
 
 ## Notes
+
 - Parser returns a normalized object and, when multiple entries are found, an array of such objects.
 - Tolerate whitespace/newlines and missing fields; unknowns remain `null` or omitted.
 - Record `source.kind = "paste"` with `source.raw` and `source.parsed` for traceability.

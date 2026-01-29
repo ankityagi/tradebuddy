@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseTradeText } from '../src/domain/parser';
 
-function pick<T extends object, K extends keyof T>(obj: T, keys: K[]): Pick<T,K> {
+function pick<T extends object, K extends keyof T>(obj: T, keys: K[]): Pick<T, K> {
   const out: any = {};
   for (const k of keys) out[k as string] = obj[k];
   return out;
@@ -11,7 +11,7 @@ describe('parseTradeText', () => {
   it('parses expired notice', () => {
     const input = 'EXPIRED PUT (IREN) IREN LIMITED COM NPVJAN 16 26 $45 as of Jan-16-2026';
     const [res] = parseTradeText(input);
-    expect(pick(res, ['action','ticker','type','expiry','strike','date'] as any)).toEqual({
+    expect(pick(res, ['action', 'ticker', 'type', 'expiry', 'strike', 'date'] as any)).toEqual({
       action: 'expired',
       ticker: 'IREN',
       type: 'put',
