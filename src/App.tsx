@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { TradesTable } from './ui/TradesTable';
 import { TradeForm } from './ui/TradeForm';
 import { PastePanel } from './ui/PastePanel';
+import { Dashboard } from './ui/Dashboard';
 import { SignIn } from './ui/SignIn';
 import { SheetSetup } from './ui/SheetSetup';
 
@@ -46,6 +47,14 @@ function Navigation() {
                   }`}
                 >
                   Paste Trade
+                </Link>
+                <Link
+                  to="/dashboard"
+                  className={`px-4 py-2 rounded transition-colors ${
+                    isActive('/dashboard') ? 'bg-blue-700 font-semibold' : 'hover:bg-blue-500'
+                  }`}
+                >
+                  Dashboard
                 </Link>
               </div>
             )}
@@ -136,6 +145,7 @@ function AppContent() {
           <Route path="/new" element={<TradeForm />} />
           <Route path="/edit/:id" element={<TradeForm />} />
           <Route path="/paste" element={<PastePanel />} />
+          <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
       </main>
     </div>
