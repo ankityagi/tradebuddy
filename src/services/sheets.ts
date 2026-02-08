@@ -334,3 +334,47 @@ export async function closeTrade(
     dte: 0, // Expired
   });
 }
+
+// Update Delta column (E) for a specific trade
+export async function updateTradeDelta(
+  spreadsheetId: string,
+  ticker: string,
+  tradeId: string,
+  delta: number
+): Promise<void> {
+  // ID format is "TICKER-rowNum", extract row number
+  const rowMatch = tradeId.match(/-(\d+)$/);
+  if (!rowMatch) {
+    throw new Error(`Invalid trade ID format: ${tradeId}`);
+  }
+  const actualRow = parseInt(rowMatch[1]);
+
+  // Update just the Delta column (E)
+  await writeRange(spreadsheetId, `${ticker}!E${actualRow}`, [[delta]]);
+}
+
+// Batch update Delta values for multiple trades
+export async function batchUpdateDeltas(
+  spreadsheetId: string,
+  updates: Array<{ ticker: string; tradeId: string; delta: number }>
+): Promise<void> {
+  // Group by ticker for efficiency
+  const byTicker = new Map<string, Array<{ row: number; delta: number }>>();
+
+  for (const update of updates) {
+    const rowMatch = update.tradeId.match(/-(\d+)$/);
+    if (!rowMatch) continue;
+
+    const row = parseInt(rowMatch[1]);
+    const existing = byTicker.get(update.ticker) || [];
+    existing.push({ row, delta: update.delta });
+    byTicker.set(update.ticker, existing);
+  }
+
+  // Update each ticker's trades
+  for (const [ticker, deltas] of byTicker) {
+    for (const { row, delta } of deltas) {
+      await writeRange(spreadsheetId, `${ticker}!E${row}`, [[delta]]);
+    }
+  }
+}

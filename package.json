@@ -38,6 +38,7 @@
   },
   "dependencies": {
     "@react-oauth/google": "^0.13.4",
+    "@uqee/black-scholes": "^1.0.7",
     "dexie": "^3.2.7",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

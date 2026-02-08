@@ -76,6 +76,7 @@ function sheetTradeToTrade(sheetTrade: sheets.SheetTrade, ticker: string): Trade
     status: isOpen ? 'open' : 'closed',
     metrics: {
       rr: sheetTrade.roi ? sheetTrade.roi / 100 : undefined,
+      delta: sheetTrade.delta || undefined, // Delta from column E
     },
     createdAt: sheetTrade.opened,
     updatedAt: sheetTrade.opened,
