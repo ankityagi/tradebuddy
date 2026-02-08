@@ -4,7 +4,7 @@ import type { Trade } from '../domain/types';
 import { getAllTrades, deleteTrade } from '../data/repo';
 import { CloseTradeModal } from './CloseTradeModal';
 import { calculateGreeks, parseOptionType } from '../services/greeks';
-import { batchUpdateDeltas } from '../services/sheets';
+import { batchUpdateDeltas, insertIVColumnForAllTabs } from '../services/sheets';
 import { getSheetUrl, extractSpreadsheetId } from '../services/auth';
 
 type FilterStatus = 'all' | 'open' | 'closed';
@@ -21,6 +21,7 @@ export function TradesTable() {
   const [tradeToClose, setTradeToClose] = useState<Trade | null>(null);
   const [calculatingGreeks, setCalculatingGreeks] = useState(false);
   const [greeksProgress, setGreeksProgress] = useState('');
+  const [settingUpSheet, setSettingUpSheet] = useState(false);
 
   const loadTrades = async () => {
     setLoading(true);
@@ -132,6 +133,34 @@ export function TradesTable() {
     }
   };
 
+  const handleSetupIVColumn = async () => {
+    if (!window.confirm('This will insert an IV column after Delta in all your ticker tabs. Your P/L and ROI formulas should automatically adjust. Continue?')) {
+      return;
+    }
+
+    setSettingUpSheet(true);
+    try {
+      const sheetUrl = getSheetUrl();
+      const spreadsheetId = sheetUrl ? extractSpreadsheetId(sheetUrl) : null;
+
+      if (!spreadsheetId) {
+        alert('No sheet connected.');
+        return;
+      }
+
+      const updatedCount = await insertIVColumnForAllTabs(spreadsheetId);
+      alert(`Added IV column to ${updatedCount} tabs! You can now use Refresh Greeks.`);
+
+      // Reload trades
+      await loadTrades();
+    } catch (error) {
+      console.error('Failed to setup IV column:', error);
+      alert('Failed to add IV column. Check console for details.');
+    } finally {
+      setSettingUpSheet(false);
+    }
+  };
+
   // Filter trades
   let filteredTrades = trades;
 
@@ -202,6 +231,13 @@ export function TradesTable() {
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-3xl font-bold">My Trades</h2>
         <div className="flex gap-3">
+          <button
+            onClick={handleSetupIVColumn}
+            disabled={settingUpSheet}
+            className="px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {settingUpSheet ? 'Setting up...' : '⚙️ Add IV Column'}
+          </button>
           <button
             onClick={handleRefreshGreeks}
             disabled={calculatingGreeks}

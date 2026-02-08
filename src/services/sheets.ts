@@ -105,6 +105,111 @@ export async function createTab(spreadsheetId: string, tabName: string): Promise
   });
 }
 
+// Get sheet ID by tab name
+async function getSheetId(spreadsheetId: string, tabName: string): Promise<number | null> {
+  const info = await getSpreadsheetInfo(spreadsheetId);
+  const sheet = info.sheets?.find((s: any) => s.properties.title === tabName);
+  return sheet?.properties?.sheetId ?? null;
+}
+
+// Column configuration for easy future additions
+export interface ColumnConfig {
+  name: string;           // Header name (e.g., "IV")
+  insertAfterIndex: number; // 0-indexed position to insert after (e.g., 4 for after column E)
+  checkIndex: number;     // Index to check if column already exists
+}
+
+// Generic function to insert a column into a specific tab
+export async function insertColumn(
+  spreadsheetId: string,
+  tabName: string,
+  config: ColumnConfig
+): Promise<boolean> {
+  const sheetId = await getSheetId(spreadsheetId, tabName);
+  if (sheetId === null) {
+    console.warn(`Sheet ${tabName} not found`);
+    return false;
+  }
+
+  try {
+    // Insert a new column at the specified position
+    await sheetsRequest(`/${spreadsheetId}:batchUpdate`, {
+      method: 'POST',
+      body: JSON.stringify({
+        requests: [
+          {
+            insertDimension: {
+              range: {
+                sheetId: sheetId,
+                dimension: 'COLUMNS',
+                startIndex: config.insertAfterIndex + 1,
+                endIndex: config.insertAfterIndex + 2,
+              },
+              inheritFromBefore: false,
+            },
+          },
+        ],
+      }),
+    });
+
+    // Update the header for the new column
+    const columnLetter = String.fromCharCode(65 + config.insertAfterIndex + 1); // A=65
+    await writeRange(spreadsheetId, `${tabName}!${columnLetter}1`, [[config.name]]);
+
+    return true;
+  } catch (error) {
+    console.error(`Failed to insert ${config.name} column for ${tabName}:`, error);
+    return false;
+  }
+}
+
+// Generic function to insert a column for all ticker tabs
+export async function insertColumnForAllTabs(
+  spreadsheetId: string,
+  config: ColumnConfig
+): Promise<number> {
+  const tabs = await getSheetTabs(spreadsheetId);
+  const tickerTabs = tabs.filter(t => t !== SUMMARY_TAB);
+
+  let updatedCount = 0;
+  for (const tab of tickerTabs) {
+    // Check if column already exists by reading header
+    const headers = await readRange(spreadsheetId, `${tab}!A1:Z1`);
+    const headerRow = headers[0] || [];
+
+    // If column at checkIndex already has the expected name, skip this tab
+    if (headerRow[config.checkIndex]?.toString().toUpperCase() === config.name.toUpperCase()) {
+      console.log(`Tab ${tab} already has ${config.name} column, skipping`);
+      continue;
+    }
+
+    const success = await insertColumn(spreadsheetId, tab, config);
+    if (success) {
+      updatedCount++;
+      console.log(`Inserted ${config.name} column for tab: ${tab}`);
+    }
+  }
+
+  return updatedCount;
+}
+
+// Predefined column configurations for easy use
+export const COLUMN_CONFIGS = {
+  IV: {
+    name: 'IV',
+    insertAfterIndex: 4,  // After column E (Delta)
+    checkIndex: 5,        // Check column F
+  } as ColumnConfig,
+  // Add more column configs here as needed:
+  // GAMMA: { name: 'Gamma', insertAfterIndex: 5, checkIndex: 6 },
+  // THETA: { name: 'Theta', insertAfterIndex: 6, checkIndex: 7 },
+};
+
+// Convenience function for IV column (backwards compatible)
+export async function insertIVColumnForAllTabs(spreadsheetId: string): Promise<number> {
+  return insertColumnForAllTabs(spreadsheetId, COLUMN_CONFIGS.IV);
+}
+
 // Read data from a specific range
 export async function readRange(
   spreadsheetId: string,
