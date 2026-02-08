@@ -261,7 +261,7 @@ export function TradesTable() {
                     >
                       {trade.realizedPL !== undefined
                         ? formatCurrency(trade.realizedPL)
-                        : calculateUnrealizedPL(trade)}
+                        : calculateUnrealizedPL()}
                     </div>
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap text-sm font-medium space-x-2">
