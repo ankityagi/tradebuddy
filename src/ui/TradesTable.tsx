@@ -67,6 +67,7 @@ export function TradesTable() {
       const spreadsheetId = sheetUrl ? extractSpreadsheetId(sheetUrl) : null;
 
       const updates: Array<{ ticker: string; tradeId: string; delta: number }> = [];
+      const greeksMap = new Map<string, { delta: number; iv: number }>();
 
       for (let i = 0; i < openTrades.length; i++) {
         const trade = openTrades[i];
@@ -90,6 +91,7 @@ export function TradesTable() {
             tradeId: trade.id,
             delta: greeks.delta,
           });
+          greeksMap.set(trade.id, { delta: greeks.delta, iv: greeks.iv });
         }
       }
 
@@ -98,6 +100,22 @@ export function TradesTable() {
         setGreeksProgress('Updating Google Sheet...');
         await batchUpdateDeltas(spreadsheetId, updates);
       }
+
+      // Update local trades state with calculated Greeks (for IV display)
+      setTrades(prevTrades => prevTrades.map(trade => {
+        const calculated = greeksMap.get(trade.id);
+        if (calculated) {
+          return {
+            ...trade,
+            metrics: {
+              ...trade.metrics,
+              delta: calculated.delta,
+              iv: calculated.iv,
+            },
+          };
+        }
+        return trade;
+      }));
 
       setGreeksProgress('');
       alert(`Updated Greeks for ${updates.length} trades!`);
@@ -265,6 +283,9 @@ export function TradesTable() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Delta
                 </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  IV
+                </th>
                 <th
                   className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                   onClick={() => toggleSort('rr')}
@@ -307,6 +328,13 @@ export function TradesTable() {
                     <div className="text-sm text-gray-900">
                       {trade.metrics.delta !== undefined
                         ? trade.metrics.delta.toFixed(2)
+                        : 'N/A'}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {trade.metrics.iv !== undefined
+                        ? `${trade.metrics.iv.toFixed(1)}%`
                         : 'N/A'}
                     </div>
                   </td>
