@@ -77,6 +77,7 @@ function sheetTradeToTrade(sheetTrade: sheets.SheetTrade, ticker: string): Trade
     metrics: {
       rr: sheetTrade.roi ? sheetTrade.roi / 100 : undefined,
       delta: sheetTrade.delta || undefined, // Delta from column E
+      iv: sheetTrade.iv || undefined, // IV from column F
     },
     createdAt: sheetTrade.opened,
     updatedAt: sheetTrade.opened,
@@ -117,7 +118,8 @@ function tradeToSheetTrade(trade: Trade | CreateTradeInput, ticker: string): Omi
     type,
     strike: leg?.strike ?? 0,
     qty: trade.quantity,
-    delta: 0, // Would need to be calculated or provided
+    delta: trade.metrics?.delta ?? 0,
+    iv: trade.metrics?.iv ?? null,
     opened: openedDate,
     expiry: leg?.expiry ?? '',
     dte,

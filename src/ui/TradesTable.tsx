@@ -66,7 +66,7 @@ export function TradesTable() {
       const sheetUrl = getSheetUrl();
       const spreadsheetId = sheetUrl ? extractSpreadsheetId(sheetUrl) : null;
 
-      const updates: Array<{ ticker: string; tradeId: string; delta: number }> = [];
+      const updates: Array<{ ticker: string; tradeId: string; delta: number; iv: number }> = [];
       const greeksMap = new Map<string, { delta: number; iv: number }>();
 
       for (let i = 0; i < openTrades.length; i++) {
@@ -90,6 +90,7 @@ export function TradesTable() {
             ticker: trade.ticker,
             tradeId: trade.id,
             delta: greeks.delta,
+            iv: greeks.iv,
           });
           greeksMap.set(trade.id, { delta: greeks.delta, iv: greeks.iv });
         }

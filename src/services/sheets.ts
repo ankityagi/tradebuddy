@@ -8,27 +8,28 @@ const SHEETS_API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
 // Sheet tab names
 export const SUMMARY_TAB = 'Summary';
 
-// Actual Trade Log columns from user's sheet:
-// A: Ticker, B: Type, C: Strike, D: Qty, E: Delta, F: Opened,
-// G: Expiry, H: DTE, I: Premium ($), J: Exit, K: Fee, L: P/L, M: ROI, N: Status, O: Helper
+// Trade Log columns (with IV added after Delta):
+// A: Ticker, B: Type, C: Strike, D: Qty, E: Delta, F: IV,
+// G: Opened, H: Expiry, I: DTE, J: Premium ($), K: Exit, L: Fee, M: P/L, N: ROI, O: Status, P: Helper
 
 export interface SheetTrade {
   id: string;           // Generated from row index
-  ticker: string;       // Column A
-  type: string;         // Column B (CSP, CC, Put, Call, LONG CALL, BULL PUT, etc.)
-  strike: number;       // Column C
-  qty: number;          // Column D
-  delta: number;        // Column E
-  opened: string;       // Column F (date opened)
-  expiry: string;       // Column G
-  dte: number | null;   // Column H (days to expiry)
-  premium: number | null; // Column I (Premium $)
-  exit: number | null;  // Column J (Exit price)
-  fee: number | null;   // Column K (Fee)
-  pnl: number | null;   // Column L (P/L)
-  roi: number | null;   // Column M (ROI %)
-  status: string;       // Column N (Open/Closed)
-  notes: string;        // Column O (Helper/Notes)
+  ticker: string;       // Column A (index 0)
+  type: string;         // Column B (index 1)
+  strike: number;       // Column C (index 2)
+  qty: number;          // Column D (index 3)
+  delta: number;        // Column E (index 4)
+  iv: number | null;    // Column F (index 5) - Implied Volatility
+  opened: string;       // Column G (index 6)
+  expiry: string;       // Column H (index 7)
+  dte: number | null;   // Column I (index 8)
+  premium: number | null; // Column J (index 9)
+  exit: number | null;  // Column K (index 10)
+  fee: number | null;   // Column L (index 11)
+  pnl: number | null;   // Column M (index 12)
+  roi: number | null;   // Column N (index 13)
+  status: string;       // Column O (index 14)
+  notes: string;        // Column P (index 15)
 }
 
 // Make authenticated request to Sheets API
@@ -188,8 +189,8 @@ export async function getTradesForTicker(
     return [];
   }
 
-  // Read columns A through O to include Status column
-  const rows = await readRange(spreadsheetId, `${ticker}!A2:O1000`);
+  // Read columns A through P (includes IV column F and Status column O)
+  const rows = await readRange(spreadsheetId, `${ticker}!A2:P1000`);
 
   return rows
     .filter(row => {
@@ -200,21 +201,22 @@ export async function getTradesForTicker(
     })
     .map((row, index) => ({
       id: `${ticker}-${index + 2}`,  // Generate ID from ticker and row number
-      ticker: row[0] || ticker,      // Column A: Ticker
-      type: row[1] || 'CSP',         // Column B: Type
-      strike: parseFloat(row[2]) || 0,  // Column C: Strike
-      qty: parseInt(row[3]) || 1,    // Column D: Qty
-      delta: parseFloat(row[4]) || 0,   // Column E: Delta
-      opened: row[5] || '',          // Column F: Opened (date)
-      expiry: row[6] || '',          // Column G: Expiry
-      dte: row[7] ? parseInt(row[7]) : null,  // Column H: DTE
-      premium: row[8] ? parseFloat(row[8]) : null, // Column I: Premium ($)
-      exit: row[9] ? parseFloat(row[9]) : null,    // Column J: Exit
-      fee: row[10] ? parseFloat(row[10]) : null,   // Column K: Fee
-      pnl: row[11] ? parseFloat(row[11]) : null,   // Column L: P/L
-      roi: row[12] ? parseFloat(row[12].toString().replace('%', '')) : null, // Column M: ROI %
-      status: row[13] || 'Open',     // Column N: Status
-      notes: row[14] || '',          // Column O: Helper/Notes
+      ticker: row[0] || ticker,      // Column A (index 0): Ticker
+      type: row[1] || 'CSP',         // Column B (index 1): Type
+      strike: parseFloat(row[2]) || 0,  // Column C (index 2): Strike
+      qty: parseInt(row[3]) || 1,    // Column D (index 3): Qty
+      delta: parseFloat(row[4]) || 0,   // Column E (index 4): Delta
+      iv: row[5] ? parseFloat(row[5]) : null,  // Column F (index 5): IV
+      opened: row[6] || '',          // Column G (index 6): Opened (date)
+      expiry: row[7] || '',          // Column H (index 7): Expiry
+      dte: row[8] ? parseInt(row[8]) : null,  // Column I (index 8): DTE
+      premium: row[9] ? parseFloat(row[9]) : null, // Column J (index 9): Premium ($)
+      exit: row[10] ? parseFloat(row[10]) : null,    // Column K (index 10): Exit
+      fee: row[11] ? parseFloat(row[11]) : null,   // Column L (index 11): Fee
+      pnl: row[12] ? parseFloat(row[12]) : null,   // Column M (index 12): P/L
+      roi: row[13] ? parseFloat(row[13].toString().replace('%', '')) : null, // Column N (index 13): ROI %
+      status: row[14] || 'Open',     // Column O (index 14): Status
+      notes: row[15] || '',          // Column P (index 15): Helper/Notes
     }));
 }
 
@@ -245,10 +247,10 @@ export async function addTrade(
   const tabs = await getSheetTabs(spreadsheetId);
   if (!tabs.includes(ticker)) {
     await createTab(spreadsheetId, ticker);
-    // Add headers matching user's existing format
-    await writeRange(spreadsheetId, `${ticker}!A1:O1`, [[
-      'Ticker', 'Type', 'Strike', 'Qty', 'Delta', 'Opened',
-      'Expiry', 'DTE', 'Premium ($)', 'Exit', 'Fee', 'P/L', 'ROI', 'Status', 'Helper'
+    // Add headers with IV column after Delta
+    await writeRange(spreadsheetId, `${ticker}!A1:P1`, [[
+      'Ticker', 'Type', 'Strike', 'Qty', 'Delta', 'IV',
+      'Opened', 'Expiry', 'DTE', 'Premium ($)', 'Exit', 'Fee', 'P/L', 'ROI', 'Status', 'Helper'
     ]]);
   }
 
@@ -257,23 +259,24 @@ export async function addTrade(
   const rowNum = existingRows.filter(r => r[0]).length + 2;
   const id = `${ticker}-${rowNum}`;
 
-  // Append trade row (columns A-O)
+  // Append trade row (columns A-P)
   await appendRow(spreadsheetId, ticker, [
     trade.ticker,      // A: Ticker
     trade.type,        // B: Type
     trade.strike,      // C: Strike
     trade.qty,         // D: Qty
     trade.delta,       // E: Delta
-    trade.opened,      // F: Opened
-    trade.expiry,      // G: Expiry
-    trade.dte ?? '',   // H: DTE
-    trade.premium ?? '', // I: Premium ($)
-    trade.exit ?? '',  // J: Exit
-    trade.fee ?? '',   // K: Fee
-    trade.pnl ?? '',   // L: P/L
-    trade.roi ?? '',   // M: ROI
-    trade.status,      // N: Status
-    trade.notes,       // O: Helper/Notes
+    trade.iv ?? '',    // F: IV
+    trade.opened,      // G: Opened
+    trade.expiry,      // H: Expiry
+    trade.dte ?? '',   // I: DTE
+    trade.premium ?? '', // J: Premium ($)
+    trade.exit ?? '',  // K: Exit
+    trade.fee ?? '',   // L: Fee
+    trade.pnl ?? '',   // M: P/L
+    trade.roi ?? '',   // N: ROI
+    trade.status,      // O: Status
+    trade.notes,       // P: Helper/Notes
   ]);
 
   return id;
@@ -292,23 +295,24 @@ export async function updateTrade(
   }
   const actualRow = parseInt(rowMatch[1]);
 
-  await writeRange(spreadsheetId, `${ticker}!A${actualRow}:O${actualRow}`, [
+  await writeRange(spreadsheetId, `${ticker}!A${actualRow}:P${actualRow}`, [
     [
       trade.ticker,      // A: Ticker
       trade.type,        // B: Type
       trade.strike,      // C: Strike
       trade.qty,         // D: Qty
       trade.delta,       // E: Delta
-      trade.opened,      // F: Opened
-      trade.expiry,      // G: Expiry
-      trade.dte ?? '',   // H: DTE
-      trade.premium ?? '', // I: Premium ($)
-      trade.exit ?? '',  // J: Exit
-      trade.fee ?? '',   // K: Fee
-      trade.pnl ?? '',   // L: P/L
-      trade.roi ?? '',   // M: ROI
-      trade.status,      // N: Status
-      trade.notes,       // O: Helper/Notes
+      trade.iv ?? '',    // F: IV
+      trade.opened,      // G: Opened
+      trade.expiry,      // H: Expiry
+      trade.dte ?? '',   // I: DTE
+      trade.premium ?? '', // J: Premium ($)
+      trade.exit ?? '',  // K: Exit
+      trade.fee ?? '',   // L: Fee
+      trade.pnl ?? '',   // M: P/L
+      trade.roi ?? '',   // N: ROI
+      trade.status,      // O: Status
+      trade.notes,       // P: Helper/Notes
     ],
   ]);
 }
@@ -335,12 +339,13 @@ export async function closeTrade(
   });
 }
 
-// Update Delta column (E) for a specific trade
-export async function updateTradeDelta(
+// Update Delta (E) and IV (F) columns for a specific trade
+export async function updateTradeGreeks(
   spreadsheetId: string,
   ticker: string,
   tradeId: string,
-  delta: number
+  delta: number,
+  iv: number
 ): Promise<void> {
   // ID format is "TICKER-rowNum", extract row number
   const rowMatch = tradeId.match(/-(\d+)$/);
@@ -349,17 +354,17 @@ export async function updateTradeDelta(
   }
   const actualRow = parseInt(rowMatch[1]);
 
-  // Update just the Delta column (E)
-  await writeRange(spreadsheetId, `${ticker}!E${actualRow}`, [[delta]]);
+  // Update Delta (E) and IV (F) columns together
+  await writeRange(spreadsheetId, `${ticker}!E${actualRow}:F${actualRow}`, [[delta, iv]]);
 }
 
-// Batch update Delta values for multiple trades
+// Batch update Delta and IV values for multiple trades
 export async function batchUpdateDeltas(
   spreadsheetId: string,
-  updates: Array<{ ticker: string; tradeId: string; delta: number }>
+  updates: Array<{ ticker: string; tradeId: string; delta: number; iv?: number }>
 ): Promise<void> {
   // Group by ticker for efficiency
-  const byTicker = new Map<string, Array<{ row: number; delta: number }>>();
+  const byTicker = new Map<string, Array<{ row: number; delta: number; iv: number }>>();
 
   for (const update of updates) {
     const rowMatch = update.tradeId.match(/-(\d+)$/);
@@ -367,14 +372,14 @@ export async function batchUpdateDeltas(
 
     const row = parseInt(rowMatch[1]);
     const existing = byTicker.get(update.ticker) || [];
-    existing.push({ row, delta: update.delta });
+    existing.push({ row, delta: update.delta, iv: update.iv ?? 0 });
     byTicker.set(update.ticker, existing);
   }
 
-  // Update each ticker's trades
-  for (const [ticker, deltas] of byTicker) {
-    for (const { row, delta } of deltas) {
-      await writeRange(spreadsheetId, `${ticker}!E${row}`, [[delta]]);
+  // Update each ticker's trades - write both Delta (E) and IV (F)
+  for (const [ticker, greeks] of byTicker) {
+    for (const { row, delta, iv } of greeks) {
+      await writeRange(spreadsheetId, `${ticker}!E${row}:F${row}`, [[delta, iv]]);
     }
   }
 }
