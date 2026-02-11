@@ -287,12 +287,15 @@ export async function addTrade(
   await initializeTickerTab(spreadsheetId, ticker);
 
   // Generate unique ID based on row count
+  // Only count rows that have actual ticker data (column A)
   const existingRows = await readRange(spreadsheetId, `${ticker}!A2:A1000`);
-  const rowNum = existingRows.filter(r => r[0]).length + 2;
+  const filledRows = existingRows.filter(r => r[0] && r[0].toString().trim() !== '');
+  const rowNum = filledRows.length + 2;
   const id = `${ticker}-${rowNum}`;
 
-  // Append trade row (columns A-P)
-  await appendRow(spreadsheetId, ticker, [
+  // Write trade row to specific row (columns A-L only, preserve formula columns M-P)
+  // This handles both new tabs (from Template with formulas in row 2) and existing tabs
+  await writeRange(spreadsheetId, `${ticker}!A${rowNum}:L${rowNum}`, [[
     trade.ticker,      // A: Ticker
     trade.type,        // B: Type
     trade.strike,      // C: Strike
@@ -305,11 +308,13 @@ export async function addTrade(
     trade.premium ?? '', // J: Premium ($)
     trade.exit ?? '',  // K: Exit
     trade.fee ?? '',   // L: Fee
-    trade.pnl ?? '',   // M: P/L
-    trade.roi ?? '',   // N: ROI
+  ]]);
+
+  // Write status column (O) - don't overwrite P/L and ROI formulas (M, N)
+  await writeRange(spreadsheetId, `${ticker}!O${rowNum}:P${rowNum}`, [[
     trade.status,      // O: Status
     trade.notes,       // P: Helper/Notes
-  ]);
+  ]]);
 
   return id;
 }
