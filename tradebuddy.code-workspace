@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "../studybuddy"
+		},
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"makefile.configureOnOpen": false
+	}
+}

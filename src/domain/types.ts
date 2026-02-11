@@ -73,6 +73,12 @@ export interface Metrics {
 
   /** Estimated Probability of Profit (approximate, based on normal distribution) */
   popEst?: number;
+
+  /** Delta - rate of change of option price relative to underlying */
+  delta?: number;
+
+  /** Implied Volatility (as decimal, e.g., 0.25 = 25%) */
+  iv?: number;
 }
 
 /**

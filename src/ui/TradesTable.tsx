@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom';
 import type { Trade } from '../domain/types';
 import { getAllTrades, deleteTrade } from '../data/repo';
 import { CloseTradeModal } from './CloseTradeModal';
+import { calculateGreeks, parseOptionType } from '../services/greeks';
+import { batchUpdateDeltas, insertIVColumnForAllTabs } from '../services/sheets';
+import { getSheetUrl, extractSpreadsheetId } from '../services/auth';
 
 type FilterStatus = 'all' | 'open' | 'closed';
 type SortField = 'createdAt' | 'ticker' | 'rr';
@@ -11,11 +14,14 @@ type SortOrder = 'asc' | 'desc';
 export function TradesTable() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>('open');
   const [filterTicker, setFilterTicker] = useState('');
   const [sortField, setSortField] = useState<SortField>('createdAt');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [tradeToClose, setTradeToClose] = useState<Trade | null>(null);
+  const [calculatingGreeks, setCalculatingGreeks] = useState(false);
+  const [greeksProgress, setGreeksProgress] = useState('');
+  const [settingUpSheet, setSettingUpSheet] = useState(false);
 
   const loadTrades = async () => {
     setLoading(true);
@@ -45,6 +51,114 @@ export function TradesTable() {
   const handleCloseComplete = () => {
     setTradeToClose(null);
     loadTrades();
+  };
+
+  const handleRefreshGreeks = async () => {
+    const openTrades = trades.filter(t => t.status === 'open');
+    if (openTrades.length === 0) {
+      alert('No open trades to calculate Greeks for.');
+      return;
+    }
+
+    setCalculatingGreeks(true);
+    setGreeksProgress('Starting Greeks calculation...');
+
+    try {
+      const sheetUrl = getSheetUrl();
+      const spreadsheetId = sheetUrl ? extractSpreadsheetId(sheetUrl) : null;
+
+      const updates: Array<{ ticker: string; tradeId: string; delta: number; iv: number }> = [];
+      const greeksMap = new Map<string, { delta: number; iv: number }>();
+
+      for (let i = 0; i < openTrades.length; i++) {
+        const trade = openTrades[i];
+        setGreeksProgress(`Calculating ${trade.ticker} (${i + 1}/${openTrades.length})...`);
+
+        const leg = trade.legs[0];
+        if (!leg?.strike || !leg?.expiry) continue;
+
+        const optionType = parseOptionType(trade.strategy);
+        const greeks = await calculateGreeks({
+          ticker: trade.ticker,
+          strike: leg.strike,
+          expiry: leg.expiry,
+          optionType,
+          premium: trade.entryPrice,
+        });
+
+        if (greeks) {
+          updates.push({
+            ticker: trade.ticker,
+            tradeId: trade.id,
+            delta: greeks.delta,
+            iv: greeks.iv,
+          });
+          greeksMap.set(trade.id, { delta: greeks.delta, iv: greeks.iv });
+        }
+      }
+
+      // Update Google Sheet with calculated deltas
+      if (spreadsheetId && updates.length > 0) {
+        setGreeksProgress('Updating Google Sheet...');
+        await batchUpdateDeltas(spreadsheetId, updates);
+      }
+
+      // Update local trades state with calculated Greeks (for IV display)
+      setTrades(prevTrades => prevTrades.map(trade => {
+        const calculated = greeksMap.get(trade.id);
+        if (calculated) {
+          return {
+            ...trade,
+            metrics: {
+              ...trade.metrics,
+              delta: calculated.delta,
+              iv: calculated.iv,
+            },
+          };
+        }
+        return trade;
+      }));
+
+      setGreeksProgress('');
+      alert(`Updated Greeks for ${updates.length} trades!`);
+
+      // Reload trades to show updated values
+      await loadTrades();
+    } catch (error) {
+      console.error('Failed to calculate Greeks:', error);
+      alert('Failed to calculate Greeks. Check console for details.');
+    } finally {
+      setCalculatingGreeks(false);
+      setGreeksProgress('');
+    }
+  };
+
+  const handleSetupIVColumn = async () => {
+    if (!window.confirm('This will insert an IV column after Delta in all your ticker tabs. Your P/L and ROI formulas should automatically adjust. Continue?')) {
+      return;
+    }
+
+    setSettingUpSheet(true);
+    try {
+      const sheetUrl = getSheetUrl();
+      const spreadsheetId = sheetUrl ? extractSpreadsheetId(sheetUrl) : null;
+
+      if (!spreadsheetId) {
+        alert('No sheet connected.');
+        return;
+      }
+
+      const updatedCount = await insertIVColumnForAllTabs(spreadsheetId);
+      alert(`Added IV column to ${updatedCount} tabs! You can now use Refresh Greeks.`);
+
+      // Reload trades
+      await loadTrades();
+    } catch (error) {
+      console.error('Failed to setup IV column:', error);
+      alert('Failed to add IV column. Check console for details.');
+    } finally {
+      setSettingUpSheet(false);
+    }
   };
 
   // Filter trades
@@ -116,12 +230,28 @@ export function TradesTable() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-3xl font-bold">My Trades</h2>
-        <Link
-          to="/new"
-          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
-        >
-          + New Trade
-        </Link>
+        <div className="flex gap-3">
+          <button
+            onClick={handleSetupIVColumn}
+            disabled={settingUpSheet}
+            className="px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {settingUpSheet ? 'Setting up...' : '⚙️ Add IV Column'}
+          </button>
+          <button
+            onClick={handleRefreshGreeks}
+            disabled={calculatingGreeks}
+            className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {calculatingGreeks ? greeksProgress || 'Calculating...' : '📊 Refresh Greeks'}
+          </button>
+          <Link
+            to="/new"
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+          >
+            + New Trade
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
@@ -187,6 +317,12 @@ export function TradesTable() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Entry
                 </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Delta
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  IV
+                </th>
                 <th
                   className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                   onClick={() => toggleSort('rr')}
@@ -224,6 +360,20 @@ export function TradesTable() {
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{formatCurrency(trade.entryPrice)}</div>
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {trade.metrics.delta !== undefined
+                        ? trade.metrics.delta.toFixed(2)
+                        : 'N/A'}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {trade.metrics.iv !== undefined
+                        ? `${trade.metrics.iv.toFixed(1)}%`
+                        : 'N/A'}
+                    </div>
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
