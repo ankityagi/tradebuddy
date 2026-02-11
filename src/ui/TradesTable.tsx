@@ -4,7 +4,39 @@ import type { Trade } from '../domain/types';
 import { getAllTrades, deleteTrade } from '../data/repo';
 import { CloseTradeModal } from './CloseTradeModal';
 import { calculateGreeks, parseOptionType } from '../services/greeks';
-import { batchUpdateDeltas, insertIVColumnForAllTabs } from '../services/sheets';
+import { batchUpdateGreeks } from '../services/sheets';
+
+// Calculate R/R ratio based on strategy type
+function calculateRiskReward(strategy: string, premium: number, strike: number, qty: number): number | null {
+  if (!premium || !strike || !qty) return null;
+
+  const strategyLower = strategy.toLowerCase();
+  const totalPremium = premium * 100 * qty; // Premium in dollars
+  const capitalAtRisk = strike * 100 * qty; // Max capital at risk
+
+  // Selling strategies (CSP, CC) - profit is premium, risk is capital at risk minus premium
+  if (strategyLower === 'csp' || strategyLower === 'cc' || strategyLower.includes('covered')) {
+    // R/R = Premium / (Capital at Risk - Premium)
+    const maxLoss = capitalAtRisk - totalPremium;
+    if (maxLoss <= 0) return null;
+    return totalPremium / maxLoss;
+  }
+
+  // Long Put - profit is (strike - premium) if stock goes to 0, risk is premium
+  if (strategyLower === 'long put' || (strategyLower === 'put' && !strategyLower.includes('spread'))) {
+    // R/R = (Max Profit) / Premium = (Strike * 100 * Qty - Premium) / Premium
+    const maxProfit = capitalAtRisk - totalPremium;
+    return maxProfit / totalPremium;
+  }
+
+  // Long Call - theoretically unlimited profit, use 100% target as default
+  if (strategyLower === 'long call' || strategyLower.includes('call')) {
+    // Use 2:1 as default target for long calls (100% profit target)
+    return 2.0;
+  }
+
+  return null;
+}
 import { getSheetUrl, extractSpreadsheetId } from '../services/auth';
 
 type FilterStatus = 'all' | 'open' | 'closed';
@@ -21,7 +53,6 @@ export function TradesTable() {
   const [tradeToClose, setTradeToClose] = useState<Trade | null>(null);
   const [calculatingGreeks, setCalculatingGreeks] = useState(false);
   const [greeksProgress, setGreeksProgress] = useState('');
-  const [settingUpSheet, setSettingUpSheet] = useState(false);
 
   const loadTrades = async () => {
     setLoading(true);
@@ -67,8 +98,8 @@ export function TradesTable() {
       const sheetUrl = getSheetUrl();
       const spreadsheetId = sheetUrl ? extractSpreadsheetId(sheetUrl) : null;
 
-      const updates: Array<{ ticker: string; tradeId: string; delta: number; iv: number }> = [];
-      const greeksMap = new Map<string, { delta: number; iv: number }>();
+      const updates: Array<{ ticker: string; tradeId: string; delta: number; iv: number; rr: number | null }> = [];
+      const greeksMap = new Map<string, { delta: number; iv: number; rr: number | null }>();
 
       for (let i = 0; i < openTrades.length; i++) {
         const trade = openTrades[i];
@@ -87,23 +118,27 @@ export function TradesTable() {
         });
 
         if (greeks) {
+          // Calculate R/R based on strategy
+          const rr = calculateRiskReward(trade.strategy, trade.entryPrice, leg.strike, trade.quantity);
+
           updates.push({
             ticker: trade.ticker,
             tradeId: trade.id,
             delta: greeks.delta,
             iv: greeks.iv,
+            rr,
           });
-          greeksMap.set(trade.id, { delta: greeks.delta, iv: greeks.iv });
+          greeksMap.set(trade.id, { delta: greeks.delta, iv: greeks.iv, rr });
         }
       }
 
-      // Update Google Sheet with calculated deltas
+      // Update Google Sheet with calculated Greeks
       if (spreadsheetId && updates.length > 0) {
         setGreeksProgress('Updating Google Sheet...');
-        await batchUpdateDeltas(spreadsheetId, updates);
+        await batchUpdateGreeks(spreadsheetId, updates);
       }
 
-      // Update local trades state with calculated Greeks (for IV display)
+      // Update local trades state with calculated Greeks
       setTrades(prevTrades => prevTrades.map(trade => {
         const calculated = greeksMap.get(trade.id);
         if (calculated) {
@@ -113,6 +148,7 @@ export function TradesTable() {
               ...trade.metrics,
               delta: calculated.delta,
               iv: calculated.iv,
+              rr: calculated.rr ?? undefined,
             },
           };
         }
@@ -130,34 +166,6 @@ export function TradesTable() {
     } finally {
       setCalculatingGreeks(false);
       setGreeksProgress('');
-    }
-  };
-
-  const handleSetupIVColumn = async () => {
-    if (!window.confirm('This will insert an IV column after Delta in all your ticker tabs. Your P/L and ROI formulas should automatically adjust. Continue?')) {
-      return;
-    }
-
-    setSettingUpSheet(true);
-    try {
-      const sheetUrl = getSheetUrl();
-      const spreadsheetId = sheetUrl ? extractSpreadsheetId(sheetUrl) : null;
-
-      if (!spreadsheetId) {
-        alert('No sheet connected.');
-        return;
-      }
-
-      const updatedCount = await insertIVColumnForAllTabs(spreadsheetId);
-      alert(`Added IV column to ${updatedCount} tabs! You can now use Refresh Greeks.`);
-
-      // Reload trades
-      await loadTrades();
-    } catch (error) {
-      console.error('Failed to setup IV column:', error);
-      alert('Failed to add IV column. Check console for details.');
-    } finally {
-      setSettingUpSheet(false);
     }
   };
 
@@ -231,13 +239,6 @@ export function TradesTable() {
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-3xl font-bold">My Trades</h2>
         <div className="flex gap-3">
-          <button
-            onClick={handleSetupIVColumn}
-            disabled={settingUpSheet}
-            className="px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {settingUpSheet ? 'Setting up...' : '⚙️ Add IV Column'}
-          </button>
           <button
             onClick={handleRefreshGreeks}
             disabled={calculatingGreeks}
@@ -330,9 +331,6 @@ export function TradesTable() {
                   R/R {sortField === 'rr' && (sortOrder === 'asc' ? '↑' : '↓')}
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  POP
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
                 <th
@@ -378,11 +376,6 @@ export function TradesTable() {
                   <td className="px-4 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
                       {trade.metrics.rr?.toFixed(2) ?? 'N/A'}
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
-                      {trade.metrics.popEst ? `${(trade.metrics.popEst * 100).toFixed(1)}%` : 'N/A'}
                     </div>
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap">

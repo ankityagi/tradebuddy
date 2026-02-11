@@ -1,10 +1,58 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { parseTradeText, ParsedTrade } from '../domain/parser';
+import { createTrade } from '../data/repo';
+import type { CreateTradeInput, Strategy, LegSide } from '../domain/types';
+
+// Convert ParsedTrade to CreateTradeInput
+function parsedToTradeInput(parsed: ParsedTrade): CreateTradeInput | null {
+  if (!parsed.ticker || !parsed.type || parsed.strike === null) {
+    return null;
+  }
+
+  // Determine side: sell if action is 'sell' or if contracts are negative (selling)
+  const side: LegSide = parsed.action === 'sell' ? 'sell' : 'buy';
+
+  // Determine strategy based on side and type
+  let strategy: Strategy = 'singleOption';
+  if (side === 'sell' && parsed.type === 'put') {
+    strategy = 'singleOption'; // CSP - will show as CSP in sheet
+  } else if (side === 'sell' && parsed.type === 'call') {
+    strategy = 'coveredCall'; // CC
+  }
+
+  return {
+    ticker: parsed.ticker,
+    strategy,
+    legs: [
+      {
+        type: parsed.type,
+        side,
+        strike: parsed.strike,
+        expiry: parsed.expiry || undefined,
+        quantity: parsed.contracts || 1,
+      },
+    ],
+    entryPrice: parsed.price || 0,
+    quantity: parsed.contracts || 1,
+    status: 'open',
+    metrics: {},
+    notes: parsed.symbol || '',
+    source: {
+      kind: 'paste',
+      raw: JSON.stringify(parsed),
+      parsed: parsed as unknown as Record<string, string | number | null>,
+    },
+  };
+}
 
 export function PastePanel() {
+  const navigate = useNavigate();
   const [text, setText] = useState('');
   const [parsed, setParsed] = useState<ParsedTrade[]>([]);
   const [hasError, setHasError] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const onParse = () => {
     if (!text.trim()) {
@@ -21,6 +69,29 @@ export function PastePanel() {
     setText('');
     setParsed([]);
     setHasError(false);
+    setSaveError(null);
+  };
+
+  const onSaveTrade = async (parsedTrade: ParsedTrade) => {
+    const tradeInput = parsedToTradeInput(parsedTrade);
+    if (!tradeInput) {
+      setSaveError('Cannot save trade: missing required fields (ticker, type, or strike)');
+      return;
+    }
+
+    setSaving(true);
+    setSaveError(null);
+
+    try {
+      await createTrade(tradeInput);
+      // Navigate to My Trades on success
+      navigate('/');
+    } catch (error) {
+      console.error('Failed to save trade:', error);
+      setSaveError(error instanceof Error ? error.message : 'Failed to save trade');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -94,8 +165,26 @@ $0.65"
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Parsed Results</h3>
 
+          {saveError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+              <p className="text-red-700 text-sm">{saveError}</p>
+            </div>
+          )}
+
           {parsed.map((trade, index) => (
             <div key={index} className="bg-gray-50 rounded-lg p-4 mb-4 last:mb-0">
+              <div className="flex justify-between items-start mb-3">
+                <h4 className="font-semibold text-gray-700">
+                  {trade.ticker || 'Unknown'} - {trade.type?.toUpperCase() || 'Option'}
+                </h4>
+                <button
+                  onClick={() => onSaveTrade(trade)}
+                  disabled={saving || !trade.ticker || !trade.type || trade.strike === null}
+                  className="bg-green-600 text-white px-4 py-1.5 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {saving ? 'Saving...' : 'Add Trade'}
+                </button>
+              </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {trade.ticker && (
                   <div>
