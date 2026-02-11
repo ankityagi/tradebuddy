@@ -233,14 +233,16 @@ export async function getTradesForTicker(
   const rows = await readRange(spreadsheetId, `${ticker}!A2:P1000`);
 
   return rows
-    .filter(row => {
+    // First map to include original row number, then filter, then extract
+    .map((row, index) => ({ row, actualRow: index + 2 }))
+    .filter(({ row }) => {
       // Filter out empty rows - require Ticker (col A) and Strike (col C) to have values
       const hasTicker = row[0] && row[0].toString().trim() !== '';
       const hasStrike = row[2] && row[2].toString().trim() !== '' && !isNaN(parseFloat(row[2]));
       return hasTicker && hasStrike;
     })
-    .map((row, index) => ({
-      id: `${ticker}-${index + 2}`,  // Generate ID from ticker and row number
+    .map(({ row, actualRow }) => ({
+      id: `${ticker}-${actualRow}`,  // Use actual row number, not filtered index
       ticker: row[0] || ticker,      // Column A: Ticker
       type: row[1] || 'CSP',         // Column B: Type
       strike: parseFloat(row[2]) || 0,  // Column C: Strike
