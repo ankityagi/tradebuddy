@@ -7,29 +7,30 @@ const SHEETS_API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
 
 // Sheet tab names
 export const SUMMARY_TAB = 'Summary';
+export const TEMPLATE_TAB = 'Template';
 
-// Trade Log columns (with IV added after Delta):
-// A: Ticker, B: Type, C: Strike, D: Qty, E: Delta, F: IV,
-// G: Opened, H: Expiry, I: DTE, J: Premium ($), K: Exit, L: Fee, M: P/L, N: ROI, O: Status, P: Helper
+// Actual Trade Log columns from user's sheet:
+// A: Ticker, B: Type, C: Strike, D: Qty, E: Delta, F: IV, G: Opened,
+// H: Expiry, I: DTE, J: Premium ($), K: Exit, L: Fee, M: P/L, N: ROI, O: Status, P: Helper
 
 export interface SheetTrade {
   id: string;           // Generated from row index
-  ticker: string;       // Column A (index 0)
-  type: string;         // Column B (index 1)
-  strike: number;       // Column C (index 2)
-  qty: number;          // Column D (index 3)
-  delta: number;        // Column E (index 4)
-  iv: number | null;    // Column F (index 5) - Implied Volatility
-  opened: string;       // Column G (index 6)
-  expiry: string;       // Column H (index 7)
-  dte: number | null;   // Column I (index 8)
-  premium: number | null; // Column J (index 9)
-  exit: number | null;  // Column K (index 10)
-  fee: number | null;   // Column L (index 11)
-  pnl: number | null;   // Column M (index 12)
-  roi: number | null;   // Column N (index 13)
-  status: string;       // Column O (index 14)
-  notes: string;        // Column P (index 15)
+  ticker: string;       // Column A
+  type: string;         // Column B (CSP, CC, Put, Call, LONG CALL, BULL PUT, etc.)
+  strike: number;       // Column C
+  qty: number;          // Column D
+  delta: number;        // Column E
+  iv: number | null;    // Column F (Implied Volatility)
+  opened: string;       // Column G (date opened)
+  expiry: string;       // Column H
+  dte: number | null;   // Column I (days to expiry)
+  premium: number | null; // Column J (Premium $)
+  exit: number | null;  // Column K (Exit price)
+  fee: number | null;   // Column L (Fee)
+  pnl: number | null;   // Column M (P/L)
+  roi: number | null;   // Column N (ROI %)
+  status: string;       // Column O (Open/Closed)
+  notes: string;        // Column P (Helper/Notes)
 }
 
 // Make authenticated request to Sheets API
@@ -89,6 +90,13 @@ export async function getSheetTabs(spreadsheetId: string): Promise<string[]> {
   return info.sheets?.map((s: any) => s.properties.title) || [];
 }
 
+// Get sheet ID by tab name (needed for duplication)
+async function getSheetId(spreadsheetId: string, tabName: string): Promise<number | null> {
+  const info = await getSpreadsheetInfo(spreadsheetId);
+  const sheet = info.sheets?.find((s: any) => s.properties.title === tabName);
+  return sheet?.properties?.sheetId ?? null;
+}
+
 // Create a new tab in the spreadsheet
 export async function createTab(spreadsheetId: string, tabName: string): Promise<void> {
   await sheetsRequest(`/${spreadsheetId}:batchUpdate`, {
@@ -105,109 +113,30 @@ export async function createTab(spreadsheetId: string, tabName: string): Promise
   });
 }
 
-// Get sheet ID by tab name
-async function getSheetId(spreadsheetId: string, tabName: string): Promise<number | null> {
-  const info = await getSpreadsheetInfo(spreadsheetId);
-  const sheet = info.sheets?.find((s: any) => s.properties.title === tabName);
-  return sheet?.properties?.sheetId ?? null;
-}
-
-// Column configuration for easy future additions
-export interface ColumnConfig {
-  name: string;           // Header name (e.g., "IV")
-  insertAfterIndex: number; // 0-indexed position to insert after (e.g., 4 for after column E)
-  checkIndex: number;     // Index to check if column already exists
-}
-
-// Generic function to insert a column into a specific tab
-export async function insertColumn(
+// Duplicate a sheet tab with a new name
+async function duplicateSheet(
   spreadsheetId: string,
-  tabName: string,
-  config: ColumnConfig
-): Promise<boolean> {
-  const sheetId = await getSheetId(spreadsheetId, tabName);
-  if (sheetId === null) {
-    console.warn(`Sheet ${tabName} not found`);
-    return false;
+  sourceTabName: string,
+  newTabName: string
+): Promise<void> {
+  const sourceSheetId = await getSheetId(spreadsheetId, sourceTabName);
+  if (sourceSheetId === null) {
+    throw new Error(`Source sheet "${sourceTabName}" not found`);
   }
 
-  try {
-    // Insert a new column at the specified position
-    await sheetsRequest(`/${spreadsheetId}:batchUpdate`, {
-      method: 'POST',
-      body: JSON.stringify({
-        requests: [
-          {
-            insertDimension: {
-              range: {
-                sheetId: sheetId,
-                dimension: 'COLUMNS',
-                startIndex: config.insertAfterIndex + 1,
-                endIndex: config.insertAfterIndex + 2,
-              },
-              inheritFromBefore: false,
-            },
+  await sheetsRequest(`/${spreadsheetId}:batchUpdate`, {
+    method: 'POST',
+    body: JSON.stringify({
+      requests: [
+        {
+          duplicateSheet: {
+            sourceSheetId,
+            newSheetName: newTabName,
           },
-        ],
-      }),
-    });
-
-    // Update the header for the new column
-    const columnLetter = String.fromCharCode(65 + config.insertAfterIndex + 1); // A=65
-    await writeRange(spreadsheetId, `${tabName}!${columnLetter}1`, [[config.name]]);
-
-    return true;
-  } catch (error) {
-    console.error(`Failed to insert ${config.name} column for ${tabName}:`, error);
-    return false;
-  }
-}
-
-// Generic function to insert a column for all ticker tabs
-export async function insertColumnForAllTabs(
-  spreadsheetId: string,
-  config: ColumnConfig
-): Promise<number> {
-  const tabs = await getSheetTabs(spreadsheetId);
-  const tickerTabs = tabs.filter(t => t !== SUMMARY_TAB);
-
-  let updatedCount = 0;
-  for (const tab of tickerTabs) {
-    // Check if column already exists by reading header
-    const headers = await readRange(spreadsheetId, `${tab}!A1:Z1`);
-    const headerRow = headers[0] || [];
-
-    // If column at checkIndex already has the expected name, skip this tab
-    if (headerRow[config.checkIndex]?.toString().toUpperCase() === config.name.toUpperCase()) {
-      console.log(`Tab ${tab} already has ${config.name} column, skipping`);
-      continue;
-    }
-
-    const success = await insertColumn(spreadsheetId, tab, config);
-    if (success) {
-      updatedCount++;
-      console.log(`Inserted ${config.name} column for tab: ${tab}`);
-    }
-  }
-
-  return updatedCount;
-}
-
-// Predefined column configurations for easy use
-export const COLUMN_CONFIGS = {
-  IV: {
-    name: 'IV',
-    insertAfterIndex: 4,  // After column E (Delta)
-    checkIndex: 5,        // Check column F
-  } as ColumnConfig,
-  // Add more column configs here as needed:
-  // GAMMA: { name: 'Gamma', insertAfterIndex: 5, checkIndex: 6 },
-  // THETA: { name: 'Theta', insertAfterIndex: 6, checkIndex: 7 },
-};
-
-// Convenience function for IV column (backwards compatible)
-export async function insertIVColumnForAllTabs(spreadsheetId: string): Promise<number> {
-  return insertColumnForAllTabs(spreadsheetId, COLUMN_CONFIGS.IV);
+        },
+      ],
+    }),
+  });
 }
 
 // Read data from a specific range
@@ -252,22 +181,28 @@ export async function appendRow(
   );
 }
 
-// Initialize a ticker tab with headers
+// Initialize a ticker tab by duplicating the Template sheet
 export async function initializeTickerTab(
   spreadsheetId: string,
   ticker: string
 ): Promise<void> {
   const tabs = await getSheetTabs(spreadsheetId);
 
-  if (!tabs.includes(ticker)) {
-    await createTab(spreadsheetId, ticker);
+  if (tabs.includes(ticker)) {
+    return; // Tab already exists
   }
 
-  // Add headers for Trade Log format
-  await writeRange(spreadsheetId, `${ticker}!A1:L1`, [[
-    'Ticker', 'Type', 'Strike', 'Qty', 'Delta', 'Opened',
-    'Expiry', 'DTE', 'P/L', 'ROI', 'Status', 'Notes'
-  ]]);
+  // Duplicate from Template if it exists, otherwise create manually
+  if (tabs.includes(TEMPLATE_TAB)) {
+    await duplicateSheet(spreadsheetId, TEMPLATE_TAB, ticker);
+  } else {
+    // Fallback: create tab manually (no formulas)
+    await createTab(spreadsheetId, ticker);
+    await writeRange(spreadsheetId, `${ticker}!A1:P1`, [[
+      'Ticker', 'Type', 'Strike', 'Qty', 'Delta', 'IV', 'Opened',
+      'Expiry', 'DTE', 'Premium ($)', 'Exit', 'Fee', 'P/L', 'ROI', 'Status', 'Notes'
+    ]]);
+  }
 }
 
 // Initialize Summary tab
@@ -294,7 +229,7 @@ export async function getTradesForTicker(
     return [];
   }
 
-  // Read columns A through P (includes IV column F and Status column O)
+  // Read columns A through P to include all columns with IV
   const rows = await readRange(spreadsheetId, `${ticker}!A2:P1000`);
 
   return rows
@@ -306,29 +241,29 @@ export async function getTradesForTicker(
     })
     .map((row, index) => ({
       id: `${ticker}-${index + 2}`,  // Generate ID from ticker and row number
-      ticker: row[0] || ticker,      // Column A (index 0): Ticker
-      type: row[1] || 'CSP',         // Column B (index 1): Type
-      strike: parseFloat(row[2]) || 0,  // Column C (index 2): Strike
-      qty: parseInt(row[3]) || 1,    // Column D (index 3): Qty
-      delta: parseFloat(row[4]) || 0,   // Column E (index 4): Delta
-      iv: row[5] ? parseFloat(row[5]) : null,  // Column F (index 5): IV
-      opened: row[6] || '',          // Column G (index 6): Opened (date)
-      expiry: row[7] || '',          // Column H (index 7): Expiry
-      dte: row[8] ? parseInt(row[8]) : null,  // Column I (index 8): DTE
-      premium: row[9] ? parseFloat(row[9]) : null, // Column J (index 9): Premium ($)
-      exit: row[10] ? parseFloat(row[10]) : null,    // Column K (index 10): Exit
-      fee: row[11] ? parseFloat(row[11]) : null,   // Column L (index 11): Fee
-      pnl: row[12] ? parseFloat(row[12]) : null,   // Column M (index 12): P/L
-      roi: row[13] ? parseFloat(row[13].toString().replace('%', '')) : null, // Column N (index 13): ROI %
-      status: row[14] || 'Open',     // Column O (index 14): Status
-      notes: row[15] || '',          // Column P (index 15): Helper/Notes
+      ticker: row[0] || ticker,      // Column A: Ticker
+      type: row[1] || 'CSP',         // Column B: Type
+      strike: parseFloat(row[2]) || 0,  // Column C: Strike
+      qty: parseInt(row[3]) || 1,    // Column D: Qty
+      delta: parseFloat(row[4]) || 0,   // Column E: Delta
+      iv: row[5] ? parseFloat(row[5].toString().replace('%', '')) : null, // Column F: IV
+      opened: row[6] || '',          // Column G: Opened (date)
+      expiry: row[7] || '',          // Column H: Expiry
+      dte: row[8] ? parseInt(row[8]) : null,  // Column I: DTE
+      premium: row[9] ? parseFloat(row[9]) : null, // Column J: Premium ($)
+      exit: row[10] ? parseFloat(row[10]) : null,    // Column K: Exit
+      fee: row[11] ? parseFloat(row[11]) : null,   // Column L: Fee
+      pnl: row[12] ? parseFloat(row[12]) : null,   // Column M: P/L
+      roi: row[13] ? parseFloat(row[13].toString().replace('%', '')) : null, // Column N: ROI %
+      status: row[14] || 'Open',     // Column O: Status
+      notes: row[15] || '',          // Column P: Helper/Notes
     }));
 }
 
 // Get all trades from all ticker tabs
 export async function getAllTrades(spreadsheetId: string): Promise<Map<string, SheetTrade[]>> {
   const tabs = await getSheetTabs(spreadsheetId);
-  const tickerTabs = tabs.filter(t => t !== SUMMARY_TAB);
+  const tickerTabs = tabs.filter(t => t !== SUMMARY_TAB && t !== TEMPLATE_TAB);
 
   const allTrades = new Map<string, SheetTrade[]>();
 
@@ -348,16 +283,8 @@ export async function addTrade(
   ticker: string,
   trade: Omit<SheetTrade, 'id'>
 ): Promise<string> {
-  // Ensure ticker tab exists with proper headers
-  const tabs = await getSheetTabs(spreadsheetId);
-  if (!tabs.includes(ticker)) {
-    await createTab(spreadsheetId, ticker);
-    // Add headers with IV column after Delta
-    await writeRange(spreadsheetId, `${ticker}!A1:P1`, [[
-      'Ticker', 'Type', 'Strike', 'Qty', 'Delta', 'IV',
-      'Opened', 'Expiry', 'DTE', 'Premium ($)', 'Exit', 'Fee', 'P/L', 'ROI', 'Status', 'Helper'
-    ]]);
-  }
+  // Ensure ticker tab exists (duplicates from Template if available)
+  await initializeTickerTab(spreadsheetId, ticker);
 
   // Generate unique ID based on row count
   const existingRows = await readRange(spreadsheetId, `${ticker}!A2:A1000`);
@@ -444,13 +371,12 @@ export async function closeTrade(
   });
 }
 
-// Update Delta (E) and IV (F) columns for a specific trade
-export async function updateTradeGreeks(
+// Update Delta column (E) for a specific trade
+export async function updateTradeDelta(
   spreadsheetId: string,
   ticker: string,
   tradeId: string,
-  delta: number,
-  iv: number
+  delta: number
 ): Promise<void> {
   // ID format is "TICKER-rowNum", extract row number
   const rowMatch = tradeId.match(/-(\d+)$/);
@@ -459,17 +385,17 @@ export async function updateTradeGreeks(
   }
   const actualRow = parseInt(rowMatch[1]);
 
-  // Update Delta (E) and IV (F) columns together
-  await writeRange(spreadsheetId, `${ticker}!E${actualRow}:F${actualRow}`, [[delta, iv]]);
+  // Update just the Delta column (E)
+  await writeRange(spreadsheetId, `${ticker}!E${actualRow}`, [[delta]]);
 }
 
-// Batch update Delta and IV values for multiple trades
+// Batch update Delta values for multiple trades (legacy, use batchUpdateGreeks instead)
 export async function batchUpdateDeltas(
   spreadsheetId: string,
   updates: Array<{ ticker: string; tradeId: string; delta: number; iv?: number }>
 ): Promise<void> {
   // Group by ticker for efficiency
-  const byTicker = new Map<string, Array<{ row: number; delta: number; iv: number }>>();
+  const byTicker = new Map<string, Array<{ row: number; delta: number; iv?: number }>>();
 
   for (const update of updates) {
     const rowMatch = update.tradeId.match(/-(\d+)$/);
@@ -477,14 +403,50 @@ export async function batchUpdateDeltas(
 
     const row = parseInt(rowMatch[1]);
     const existing = byTicker.get(update.ticker) || [];
-    existing.push({ row, delta: update.delta, iv: update.iv ?? 0 });
+    existing.push({ row, delta: update.delta, iv: update.iv });
     byTicker.set(update.ticker, existing);
   }
 
-  // Update each ticker's trades - write both Delta (E) and IV (F)
+  // Update each ticker's trades - Delta in E, IV in F
   for (const [ticker, greeks] of byTicker) {
     for (const { row, delta, iv } of greeks) {
-      await writeRange(spreadsheetId, `${ticker}!E${row}:F${row}`, [[delta, iv]]);
+      // Update Delta (column E) and IV (column F) together
+      // Format IV as percentage string to prevent Google Sheets from interpreting as date
+      const ivFormatted = iv !== undefined ? `${iv.toFixed(2)}%` : '';
+      await writeRange(spreadsheetId, `${ticker}!E${row}:F${row}`, [[delta, ivFormatted]]);
+    }
+  }
+}
+
+// Batch update Greeks (Delta, IV, R/R) for multiple trades
+export async function batchUpdateGreeks(
+  spreadsheetId: string,
+  updates: Array<{ ticker: string; tradeId: string; delta: number; iv: number; rr: number | null }>
+): Promise<void> {
+  // Group by ticker for efficiency
+  const byTicker = new Map<string, Array<{ row: number; delta: number; iv: number; rr: number | null }>>();
+
+  for (const update of updates) {
+    const rowMatch = update.tradeId.match(/-(\d+)$/);
+    if (!rowMatch) continue;
+
+    const row = parseInt(rowMatch[1]);
+    const existing = byTicker.get(update.ticker) || [];
+    existing.push({ row, delta: update.delta, iv: update.iv, rr: update.rr });
+    byTicker.set(update.ticker, existing);
+  }
+
+  // Update each ticker's trades
+  for (const [ticker, greeks] of byTicker) {
+    for (const { row, delta, iv, rr } of greeks) {
+      // Format IV as percentage string to prevent Google Sheets from interpreting as date
+      const ivFormatted = `${iv.toFixed(2)}%`;
+      // Format R/R as percentage for ROI column (N)
+      const rrFormatted = rr !== null ? `${(rr * 100).toFixed(2)}%` : '';
+
+      // Update Delta (E), IV (F), and ROI/R/R (N)
+      await writeRange(spreadsheetId, `${ticker}!E${row}:F${row}`, [[delta, ivFormatted]]);
+      await writeRange(spreadsheetId, `${ticker}!N${row}`, [[rrFormatted]]);
     }
   }
 }
