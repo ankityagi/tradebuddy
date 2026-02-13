@@ -288,11 +288,17 @@ export async function addTrade(
   // Ensure ticker tab exists (duplicates from Template if available)
   await initializeTickerTab(spreadsheetId, ticker);
 
-  // Generate unique ID based on row count
-  // Only count rows that have actual ticker data (column A)
+  // Find the first empty row in column A to insert new trade
+  // This handles sheets with metrics sections below the data area
   const existingRows = await readRange(spreadsheetId, `${ticker}!A2:A1000`);
-  const filledRows = existingRows.filter(r => r[0] && r[0].toString().trim() !== '');
-  const rowNum = filledRows.length + 2;
+
+  // Find first empty row index (where we can insert the new trade)
+  const firstEmptyIndex = existingRows.findIndex(row => !row[0] || row[0].toString().trim() === '');
+
+  // If found empty row, use it; otherwise append after last row
+  const rowNum = firstEmptyIndex !== -1
+    ? firstEmptyIndex + 2  // +2 because row 1 is header and array is 0-indexed
+    : existingRows.length + 2; // No empty rows found, append at end
   const id = `${ticker}-${rowNum}`;
 
   // Write trade row to specific row (columns A-L only, preserve formula columns M-P)
