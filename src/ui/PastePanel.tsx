@@ -238,6 +238,38 @@ $0.65"
                     </p>
                   </div>
                 )}
+                {trade.commission !== null && trade.commission !== undefined && (
+                  <div>
+                    <span className="text-xs text-gray-500 uppercase">Commission</span>
+                    <p className="font-semibold text-gray-800">${trade.commission.toFixed(2)}</p>
+                  </div>
+                )}
+                {trade.fees !== null && trade.fees !== undefined && (
+                  <div>
+                    <span className="text-xs text-gray-500 uppercase">Fees</span>
+                    <p className="font-semibold text-gray-800">${trade.fees.toFixed(2)}</p>
+                  </div>
+                )}
+                {(trade.commission || trade.fees) && (
+                  <div>
+                    <span className="text-xs text-gray-500 uppercase">Total Fees</span>
+                    <p className="font-semibold text-orange-600">
+                      ${((trade.commission || 0) + (trade.fees || 0)).toFixed(2)}
+                    </p>
+                  </div>
+                )}
+                {trade.date && (
+                  <div>
+                    <span className="text-xs text-gray-500 uppercase">Trade Date</span>
+                    <p className="font-semibold text-gray-800">{trade.date}</p>
+                  </div>
+                )}
+                {trade.margin && (
+                  <div>
+                    <span className="text-xs text-gray-500 uppercase">Account Type</span>
+                    <p className="font-semibold text-gray-800">Margin</p>
+                  </div>
+                )}
               </div>
             </div>
           ))}
