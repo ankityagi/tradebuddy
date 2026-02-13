@@ -226,6 +226,16 @@ export function TradesTable() {
     return 'N/A';
   };
 
+  const calculateDTE = (trade: Trade): number | null => {
+    const expiry = trade.legs[0]?.expiry;
+    if (!expiry) return null;
+    const expiryDate = new Date(expiry);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dte = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    return dte >= 0 ? dte : 0;
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -324,6 +334,9 @@ export function TradesTable() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   IV
                 </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  DTE
+                </th>
                 <th
                   className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                   onClick={() => toggleSort('rr')}
@@ -371,6 +384,19 @@ export function TradesTable() {
                       {trade.metrics.iv !== undefined
                         ? `${trade.metrics.iv.toFixed(1)}%`
                         : 'N/A'}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <div className={`text-sm font-medium ${
+                      (() => {
+                        const dte = calculateDTE(trade);
+                        if (dte === null) return 'text-gray-500';
+                        if (dte <= 7) return 'text-red-600';
+                        if (dte <= 14) return 'text-orange-500';
+                        return 'text-gray-900';
+                      })()
+                    }`}>
+                      {calculateDTE(trade) ?? 'N/A'}
                     </div>
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap">
