@@ -56,7 +56,84 @@ Before deploying, update Google Cloud Console:
    https://your-app.vercel.app
    ```
 
-### 3. Vercel Deployment
+### 3. Publish Google OAuth App to Production
+
+By default, Google OAuth apps are in **"Testing" mode** (limited to 100 test users you manually add). To allow any user to sign in, you must publish the app.
+
+#### Step 1: Configure OAuth Consent Screen
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Navigate to **APIs & Services** → **OAuth consent screen**
+3. Ensure all required fields are filled:
+   - **App name**: TradeBuddy
+   - **User support email**: your email
+   - **App logo**: upload a logo (optional but recommended)
+   - **Application home page**: `https://your-app.vercel.app`
+   - **Authorized domains**: `vercel.app`
+   - **Developer contact email**: your email
+
+#### Step 2: Add Privacy Policy & Terms of Service
+
+Google requires these URLs for production apps:
+
+1. Create simple pages (can host on same Vercel app):
+   - Privacy Policy: `https://your-app.vercel.app/privacy`
+   - Terms of Service: `https://your-app.vercel.app/terms`
+2. Add these URLs in OAuth consent screen → **App domain** section
+
+*Tip: Simple markdown pages are fine - they just need to exist.*
+
+#### Step 3: Review Scopes
+
+1. In OAuth consent screen, click **Edit App** → go to **Scopes**
+2. Verify these scopes are listed:
+   | Scope | Type | Verification |
+   |-------|------|--------------|
+   | `userinfo.email` | Non-sensitive | Not required |
+   | `userinfo.profile` | Non-sensitive | Not required |
+   | `spreadsheets` | **Sensitive** | May require verification |
+
+#### Step 4: Publish the App
+
+1. Go to **OAuth consent screen** main page
+2. Find **Publishing status** (shows "Testing")
+3. Click **PUBLISH APP**
+4. Click **CONFIRM** in the dialog
+
+#### Step 5: Handle Verification (If Required)
+
+**For sensitive scopes (`spreadsheets`)**, Google may require verification:
+
+| Scenario | What Happens |
+|----------|--------------|
+| **< 100 users** | Usually no verification needed |
+| **> 100 users** | Google may request verification |
+| **Unverified** | Users see warning but can proceed |
+
+**If unverified, users will see:**
+> "Google hasn't verified this app"
+
+Users can still proceed by clicking:
+1. **Advanced** → **Go to TradeBuddy (unsafe)**
+
+**To complete verification (if requested):**
+
+- [ ] Privacy policy accessible at public URL
+- [ ] Terms of service accessible at public URL
+- [ ] Submit verification request in OAuth consent screen
+- [ ] Respond to Google's questions about scope usage
+- [ ] Wait 3-5 business days for review
+
+#### Quick Path for Small Teams (< 100 users)
+
+If you have fewer than 100 users, you can skip verification:
+1. Publish the app (Step 4)
+2. Tell users to click through the "unverified app" warning
+3. This is perfectly fine for personal/team use
+
+---
+
+### 4. Vercel Deployment
 
 #### Option A: Via Vercel Dashboard (Recommended)
 
@@ -90,7 +167,7 @@ vercel env add VITE_GOOGLE_CLIENT_ID
 vercel --prod
 ```
 
-### 4. Add Vercel Configuration (Optional)
+### 5. Add Vercel Configuration (Optional)
 
 Create `vercel.json` for SPA routing:
 
@@ -186,12 +263,26 @@ If usage grows significantly:
 
 ## Implementation Tasks
 
+### Vercel Setup
 1. [x] Create `vercel.json` configuration
 2. [ ] Connect repository to Vercel
 3. [ ] Configure environment variables (`VITE_GOOGLE_CLIENT_ID`)
-4. [ ] Update Google OAuth authorized origins in Google Cloud Console
-5. [ ] Deploy and test
-6. [ ] (Optional) Set up custom domain
+4. [ ] Deploy and verify build works
+
+### Google OAuth Production
+5. [ ] Update authorized JavaScript origins with Vercel domain
+6. [ ] Update authorized redirect URIs with Vercel domain
+7. [ ] Fill out OAuth consent screen (app name, emails, logo)
+8. [ ] Add Privacy Policy page
+9. [ ] Add Terms of Service page
+10. [ ] Click "PUBLISH APP" to exit Testing mode
+11. [ ] (If required) Complete Google verification for sensitive scopes
+
+### Final Testing
+12. [ ] Test Google OAuth sign-in on production
+13. [ ] Test Google Sheets integration
+14. [ ] Test on mobile browsers
+15. [ ] (Optional) Set up custom domain
 
 ---
 
