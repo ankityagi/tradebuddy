@@ -85,7 +85,7 @@ export function PastePanel() {
     try {
       await createTrade(tradeInput);
       // Navigate to My Trades on success
-      navigate('/');
+      navigate('/trades');
     } catch (error) {
       console.error('Failed to save trade:', error);
       setSaveError(error instanceof Error ? error.message : 'Failed to save trade');

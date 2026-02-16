@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { Dashboard } from './ui/Dashboard';
 import { TradesTable } from './ui/TradesTable';
 import { TradeForm } from './ui/TradeForm';
 import { PastePanel } from './ui/PastePanel';
@@ -27,6 +28,14 @@ function Navigation() {
                   to="/"
                   className={`px-4 py-2 rounded transition-colors ${
                     isActive('/') ? 'bg-blue-700 font-semibold' : 'hover:bg-blue-500'
+                  }`}
+                >
+                  Dashboard
+                </Link>
+                <Link
+                  to="/trades"
+                  className={`px-4 py-2 rounded transition-colors ${
+                    isActive('/trades') ? 'bg-blue-700 font-semibold' : 'hover:bg-blue-500'
                   }`}
                 >
                   My Trades
@@ -132,7 +141,8 @@ function AppContent() {
       <Navigation />
       <main className="container mx-auto px-4 py-8">
         <Routes>
-          <Route path="/" element={<TradesTable />} />
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/trades" element={<TradesTable />} />
           <Route path="/new" element={<TradeForm />} />
           <Route path="/edit/:id" element={<TradeForm />} />
           <Route path="/paste" element={<PastePanel />} />

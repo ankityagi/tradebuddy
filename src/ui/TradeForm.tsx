@@ -110,7 +110,7 @@ export function TradeForm() {
         });
       }
 
-      navigate('/');
+      navigate('/trades');
     } catch (err) {
       if (err instanceof z.ZodError) {
         const fieldErrors: Record<string, string> = {};
@@ -424,7 +424,7 @@ export function TradeForm() {
           </button>
           <button
             type="button"
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/trades')}
             className="px-6 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
           >
             Cancel
