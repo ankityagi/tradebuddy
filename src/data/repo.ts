@@ -87,6 +87,18 @@ function sheetTradeToTrade(sheetTrade: sheets.SheetTrade, ticker: string): Trade
 }
 
 /**
+ * Format date as MM/DD/YY for Google Sheets
+ */
+function formatDateForSheet(isoDate: string): string {
+  // Handle ISO format YYYY-MM-DD or full ISO timestamp
+  const datePart = isoDate.split('T')[0];
+  const [year, month, day] = datePart.split('-');
+  if (!year || !month || !day) return isoDate;
+  const yy = year.slice(-2); // Last 2 digits of year
+  return `${month}/${day}/${yy}`;
+}
+
+/**
  * Convert Trade to SheetTrade (for creating/updating)
  */
 function tradeToSheetTrade(trade: Trade | CreateTradeInput, ticker: string): Omit<sheets.SheetTrade, 'id'> {
@@ -102,7 +114,19 @@ function tradeToSheetTrade(trade: Trade | CreateTradeInput, ticker: string): Omi
     type = isCall ? 'Call' : 'Put';
   }
 
-  const openedDate = 'createdAt' in trade ? trade.createdAt.split('T')[0] : new Date().toISOString().split('T')[0];
+  // Get opened date from source.parsed.date if available, otherwise use today
+  let openedDateRaw: string;
+  if (trade.source?.parsed?.date && typeof trade.source.parsed.date === 'string') {
+    openedDateRaw = trade.source.parsed.date;
+  } else if ('createdAt' in trade) {
+    openedDateRaw = trade.createdAt.split('T')[0];
+  } else {
+    openedDateRaw = new Date().toISOString().split('T')[0];
+  }
+  const openedDate = formatDateForSheet(openedDateRaw);
+
+  // Format expiry date as MM/DD/YY
+  const expiryFormatted = leg?.expiry ? formatDateForSheet(leg.expiry) : '';
 
   // Calculate DTE if expiry is set
   let dte: number | null = null;
@@ -113,6 +137,15 @@ function tradeToSheetTrade(trade: Trade | CreateTradeInput, ticker: string): Omi
     if (dte < 0) dte = 0;
   }
 
+  // Extract fees (commission + fees) from source.parsed if available
+  let fee: number | null = null;
+  if (trade.source?.parsed) {
+    const commission = typeof trade.source.parsed.commission === 'number' ? trade.source.parsed.commission : 0;
+    const fees = typeof trade.source.parsed.fees === 'number' ? trade.source.parsed.fees : 0;
+    fee = commission + fees;
+    if (fee === 0) fee = null;
+  }
+
   return {
     ticker: ticker,
     type,
@@ -121,11 +154,11 @@ function tradeToSheetTrade(trade: Trade | CreateTradeInput, ticker: string): Omi
     delta: 0, // Would need to be calculated or provided
     iv: null, // Would need to be calculated or provided
     opened: openedDate,
-    expiry: leg?.expiry ?? '',
+    expiry: expiryFormatted,
     dte,
     premium: trade.entryPrice ?? null,
     exit: null, // Set when closing trade
-    fee: null,  // Not tracked currently
+    fee,
     pnl: trade.realizedPL ?? null,
     roi: null, // Would need to be calculated
     status: trade.status === 'open' ? 'OPEN' : 'CLOSED',

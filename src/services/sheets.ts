@@ -151,6 +151,18 @@ export async function readRange(
   return data.values || [];
 }
 
+// Read formulas from a specific range (returns formula strings like "=A1+B1")
+async function readFormulas(
+  spreadsheetId: string,
+  range: string
+): Promise<string[][]> {
+  const response = await sheetsRequest(
+    `/${spreadsheetId}/values/${encodeURIComponent(range)}?valueRenderOption=FORMULA`
+  );
+  const data = await response.json();
+  return data.values || [];
+}
+
 // Write data to a specific range
 export async function writeRange(
   spreadsheetId: string,
@@ -288,11 +300,17 @@ export async function addTrade(
   // Ensure ticker tab exists (duplicates from Template if available)
   await initializeTickerTab(spreadsheetId, ticker);
 
-  // Generate unique ID based on row count
-  // Only count rows that have actual ticker data (column A)
+  // Find the first empty row in column A to insert new trade
+  // This handles sheets with metrics sections below the data area
   const existingRows = await readRange(spreadsheetId, `${ticker}!A2:A1000`);
-  const filledRows = existingRows.filter(r => r[0] && r[0].toString().trim() !== '');
-  const rowNum = filledRows.length + 2;
+
+  // Find first empty row index (where we can insert the new trade)
+  const firstEmptyIndex = existingRows.findIndex(row => !row[0] || row[0].toString().trim() === '');
+
+  // If found empty row, use it; otherwise append after last row
+  const rowNum = firstEmptyIndex !== -1
+    ? firstEmptyIndex + 2  // +2 because row 1 is header and array is 0-indexed
+    : existingRows.length + 2; // No empty rows found, append at end
   const id = `${ticker}-${rowNum}`;
 
   // Write trade row to specific row (columns A-L only, preserve formula columns M-P)
@@ -312,7 +330,29 @@ export async function addTrade(
     trade.fee ?? '',   // L: Fee
   ]]);
 
-  // Write status column (O) - don't overwrite P/L and ROI formulas (M, N)
+  // Copy P/L and ROI formulas from Template row 2 and adjust for new row
+  try {
+    const templateFormulas = await readFormulas(spreadsheetId, `${TEMPLATE_TAB}!M2:N2`);
+    if (templateFormulas.length > 0 && templateFormulas[0].length >= 2) {
+      const plFormula = templateFormulas[0][0];
+      const roiFormula = templateFormulas[0][1];
+
+      // Adjust row references in formulas (replace row 2 references with new row number)
+      const adjustedPL = plFormula?.replace(/(\$?)([A-Z]+)(\$?)2\b/g, `$1$2$3${rowNum}`) || '';
+      const adjustedROI = roiFormula?.replace(/(\$?)([A-Z]+)(\$?)2\b/g, `$1$2$3${rowNum}`) || '';
+
+      if (adjustedPL || adjustedROI) {
+        await writeRange(spreadsheetId, `${ticker}!M${rowNum}:N${rowNum}`, [[
+          adjustedPL,    // M: P/L formula
+          adjustedROI,   // N: ROI formula
+        ]]);
+      }
+    }
+  } catch (error) {
+    console.warn('Could not copy P/L and ROI formulas from Template:', error);
+  }
+
+  // Write status column (O)
   await writeRange(spreadsheetId, `${ticker}!O${rowNum}:P${rowNum}`, [[
     trade.status,      // O: Status
     trade.notes,       // P: Helper/Notes
