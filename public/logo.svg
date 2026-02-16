@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="48" fill="#10B981"/>
+
+  <!-- Upward arrow / chart line -->
+  <path d="M25 65 L45 45 L55 55 L75 30" stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Arrow head -->
+  <path d="M67 30 L75 30 L75 38" stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Base line -->
+  <line x1="20" y1="75" x2="80" y2="75" stroke="white" stroke-width="4" stroke-linecap="round" opacity="0.5"/>
+</svg>
