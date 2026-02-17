@@ -5,10 +5,10 @@ import { Dashboard } from './ui/Dashboard';
 import { TradesTable } from './ui/TradesTable';
 import { TradeForm } from './ui/TradeForm';
 import { PastePanel } from './ui/PastePanel';
-import { SignIn } from './ui/SignIn';
 import { SheetSetup } from './ui/SheetSetup';
 import { Privacy } from './ui/Privacy';
 import { Terms } from './ui/Terms';
+import { LandingPage } from './ui/LandingPage';
 
 function Navigation() {
   const location = useLocation();
@@ -113,16 +113,9 @@ function AppContent() {
     );
   }
 
-  // Not signed in - show sign in page
+  // Not signed in - show landing page
   if (!isSignedIn) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Navigation />
-        <main className="container mx-auto px-4 py-8">
-          <SignIn />
-        </main>
-      </div>
-    );
+    return <LandingPage />;
   }
 
   // Signed in but no sheet connected - show setup page
