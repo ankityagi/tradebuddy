@@ -20,8 +20,8 @@ interface PerformanceChartProps {
 export function PerformanceChart({ data }: PerformanceChartProps) {
   if (data.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Performance</h3>
+      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
+        <h3 className="text-lg font-semibold text-white mb-4">Monthly Performance</h3>
         <div className="h-64 flex items-center justify-center text-gray-500">
           No closed trades yet. Close some trades to see performance data.
         </div>
@@ -30,22 +30,25 @@ export function PerformanceChart({ data }: PerformanceChartProps) {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Performance</h3>
+    <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
+      <h3 className="text-lg font-semibold text-white mb-4">Monthly Performance</h3>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="displayMonth" tick={{ fontSize: 12 }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+            <XAxis dataKey="displayMonth" tick={{ fontSize: 12, fill: '#9CA3AF' }} stroke="#4B5563" />
             <YAxis
               tickFormatter={(value) => `$${value.toLocaleString()}`}
-              tick={{ fontSize: 12 }}
+              tick={{ fontSize: 12, fill: '#9CA3AF' }}
+              stroke="#4B5563"
             />
             <Tooltip
               formatter={(value: number) => formatCurrency(value)}
               labelFormatter={(label) => label}
+              contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+              labelStyle={{ color: '#F9FAFB' }}
             />
-            <Legend />
+            <Legend wrapperStyle={{ color: '#9CA3AF' }} />
             <ReferenceLine y={0} stroke="#6B7280" />
             <Bar dataKey="csp" name="CSP" fill="#3B82F6" stackId="a" />
             <Bar dataKey="cc" name="Covered Call" fill="#10B981" stackId="a" />
