@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export function SignIn() {
@@ -51,6 +52,12 @@ export function SignIn() {
             <li>• Your data stays in your Google Drive</li>
             <li>• Revoke access anytime</li>
           </ul>
+        </div>
+
+        <div className="mt-6 pt-4 border-t text-xs text-gray-400">
+          <Link to="/privacy" className="hover:text-blue-600">Privacy Policy</Link>
+          <span className="mx-2">•</span>
+          <Link to="/terms" className="hover:text-blue-600">Terms of Service</Link>
         </div>
       </div>
     </div>

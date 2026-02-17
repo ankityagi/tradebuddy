@@ -7,6 +7,8 @@ import { TradeForm } from './ui/TradeForm';
 import { PastePanel } from './ui/PastePanel';
 import { SignIn } from './ui/SignIn';
 import { SheetSetup } from './ui/SheetSetup';
+import { Privacy } from './ui/Privacy';
+import { Terms } from './ui/Terms';
 
 function Navigation() {
   const location = useLocation();
@@ -155,9 +157,20 @@ function AppContent() {
 export function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
+      <Routes>
+        {/* Public pages - no auth required */}
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+        {/* Main app - wrapped in AuthProvider */}
+        <Route
+          path="*"
+          element={
+            <AuthProvider>
+              <AppContent />
+            </AuthProvider>
+          }
+        />
+      </Routes>
     </BrowserRouter>
   );
 }
