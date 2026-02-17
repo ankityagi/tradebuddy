@@ -1,47 +1,85 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { isValidSheetUrl, extractSpreadsheetId } from '../services/auth';
-import { validateSheetAccess, initializeSummaryTab, getSheetTabs } from '../services/sheets';
+import { initializeSummaryTab } from '../services/sheets';
+import { loadPickerApi, openSpreadsheetPicker, createNewSpreadsheet } from '../services/picker';
+import { extractSpreadsheetId } from '../services/auth';
 
 export function SheetSetup() {
-  const { user, setSheetUrl } = useAuth();
-  const [url, setUrl] = useState('');
-  const [isValidating, setIsValidating] = useState(false);
+  const { user, accessToken, setSheetUrl } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
+  const [isPickerReady, setIsPickerReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
 
-  const handleConnect = async () => {
-    if (!url.trim()) {
-      setError('Please enter a Google Sheets URL');
+  // Load Google Picker API on mount
+  useEffect(() => {
+    loadPickerApi()
+      .then(() => setIsPickerReady(true))
+      .catch((err) => {
+        console.error('Failed to load Picker API:', err);
+        setError('Failed to load Google Picker. Please refresh the page.');
+      });
+  }, []);
+
+  const handlePickSheet = async () => {
+    if (!accessToken) {
+      setError('Not authenticated. Please sign in again.');
       return;
     }
 
-    if (!isValidSheetUrl(url)) {
-      setError('Please enter a valid Google Sheets URL');
-      return;
-    }
-
-    setIsValidating(true);
     setError(null);
+    setStatus(null);
 
     try {
-      // Validate access
-      await validateSheetAccess(url);
+      openSpreadsheetPicker(
+        accessToken,
+        async (spreadsheetId, spreadsheetUrl, name) => {
+          setIsLoading(true);
+          setStatus(`Connecting to "${name}"...`);
 
-      // Initialize Summary tab if needed
-      const spreadsheetId = extractSpreadsheetId(url)!;
-      await initializeSummaryTab(spreadsheetId);
-
-      // Save and proceed
-      setSheetUrl(url);
+          try {
+            // Initialize Summary tab if needed
+            await initializeSummaryTab(spreadsheetId);
+            setSheetUrl(spreadsheetUrl);
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to initialize sheet');
+            setIsLoading(false);
+            setStatus(null);
+          }
+        },
+        () => {
+          // User cancelled - do nothing
+          setStatus(null);
+        }
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to connect to sheet');
-    } finally {
-      setIsValidating(false);
+      setError(err instanceof Error ? err.message : 'Failed to open picker');
     }
   };
 
   const handleCreateNew = async () => {
-    setError('Creating new sheets is not yet implemented. Please create a sheet manually in Google Drive and paste the URL here.');
+    if (!accessToken) {
+      setError('Not authenticated. Please sign in again.');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setStatus('Creating new spreadsheet...');
+
+    try {
+      const { id, url } = await createNewSpreadsheet(accessToken);
+      setStatus('Initializing spreadsheet...');
+
+      // Initialize Summary tab
+      await initializeSummaryTab(id);
+
+      setSheetUrl(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create spreadsheet');
+      setIsLoading(false);
+      setStatus(null);
+    }
   };
 
   return (
@@ -62,16 +100,30 @@ export function SheetSetup() {
         </div>
 
         <p className="text-gray-600 mb-6">
-          Connect your Google Sheet to start tracking trades. You can use an existing sheet or create a new one.
+          Connect a Google Sheet to store your trades. Your data stays in your own Google Drive.
         </p>
 
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            {error}
+          </div>
+        )}
+
+        {status && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm flex items-center gap-2">
+            <span className="animate-spin">⏳</span>
+            {status}
+          </div>
+        )}
+
         {/* Create New Option */}
-        <div className="mb-6">
+        <div className="mb-4">
           <button
             onClick={handleCreateNew}
-            className="w-full bg-blue-600 text-white rounded-lg px-6 py-3 font-semibold hover:bg-blue-700 transition-colors"
+            disabled={isLoading}
+            className="w-full bg-blue-600 text-white rounded-lg px-6 py-3 font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Create New TradeBuddy Sheet
+            {isLoading ? 'Creating...' : 'Create New TradeBuddy Sheet'}
           </button>
           <p className="text-xs text-gray-500 mt-2 text-center">
             Creates a new sheet in your Google Drive with the required structure
@@ -83,48 +135,34 @@ export function SheetSetup() {
             <div className="w-full border-t border-gray-300"></div>
           </div>
           <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white text-gray-500">or use existing sheet</span>
+            <span className="px-2 bg-white text-gray-500">or</span>
           </div>
         </div>
 
-        {/* Connect Existing Sheet */}
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="sheet-url" className="block text-sm font-medium text-gray-700 mb-1">
-              Google Sheets URL
-            </label>
-            <input
-              id="sheet-url"
-              type="url"
-              value={url}
-              onChange={(e) => {
-                setUrl(e.target.value);
-                setError(null);
-              }}
-              placeholder="https://docs.google.com/spreadsheets/d/..."
-              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                error ? 'border-red-500' : 'border-gray-300'
-              }`}
-            />
-            {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-          </div>
-
+        {/* Pick Existing Sheet */}
+        <div className="mb-4">
           <button
-            onClick={handleConnect}
-            disabled={isValidating || !url.trim()}
-            className="w-full bg-gray-800 text-white rounded-lg px-6 py-3 font-semibold hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handlePickSheet}
+            disabled={isLoading || !isPickerReady}
+            className="w-full bg-gray-800 text-white rounded-lg px-6 py-3 font-semibold hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            {isValidating ? 'Validating...' : 'Connect Existing Sheet'}
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+            </svg>
+            {!isPickerReady ? 'Loading...' : 'Choose from Google Drive'}
           </button>
+          <p className="text-xs text-gray-500 mt-2 text-center">
+            Select an existing spreadsheet from your Google Drive
+          </p>
         </div>
 
         {/* Help Section */}
-        <div className="mt-8 p-4 bg-blue-50 rounded-lg">
-          <h3 className="font-semibold text-blue-800 mb-2">Sheet Requirements</h3>
-          <ul className="text-sm text-blue-700 space-y-1">
-            <li>• Must be a Google Sheets document</li>
-            <li>• You must have edit access</li>
-            <li>• App will create tabs for each ticker + Summary</li>
+        <div className="mt-8 p-4 bg-green-50 rounded-lg">
+          <h3 className="font-semibold text-green-800 mb-2">Privacy First</h3>
+          <ul className="text-sm text-green-700 space-y-1">
+            <li>• We can only access sheets you explicitly select</li>
+            <li>• Your other Google Drive files remain private</li>
+            <li>• Revoke access anytime in Google Account settings</li>
           </ul>
         </div>
       </div>
