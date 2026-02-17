@@ -13,9 +13,9 @@ interface StatCardProps {
 
 export function StatCard({ title, value, trend = 'neutral', subtitle, href }: StatCardProps) {
   const trendColors: Record<TrendDirection, string> = {
-    up: 'text-green-600',
-    down: 'text-red-600',
-    neutral: 'text-gray-900',
+    up: 'text-emerald-400',
+    down: 'text-red-400',
+    neutral: 'text-white',
   };
 
   const trendIcons: Record<TrendDirection, string> = {
@@ -26,7 +26,7 @@ export function StatCard({ title, value, trend = 'neutral', subtitle, href }: St
 
   const content = (
     <>
-      <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">{title}</p>
+      <p className="text-sm font-medium text-gray-400 uppercase tracking-wide">{title}</p>
       <div className="mt-2 flex items-baseline">
         <p className={`text-2xl font-semibold ${trendColors[trend]}`}>
           {trendIcons[trend] && <span className="mr-1">{trendIcons[trend]}</span>}
@@ -43,7 +43,7 @@ export function StatCard({ title, value, trend = 'neutral', subtitle, href }: St
     return (
       <Link
         to={href}
-        className="bg-white rounded-lg shadow p-6 block hover:shadow-md transition-shadow cursor-pointer"
+        className="bg-gray-800 rounded-xl border border-gray-700 p-6 block hover:border-gray-600 transition-colors cursor-pointer"
       >
         {content}
       </Link>
@@ -51,7 +51,7 @@ export function StatCard({ title, value, trend = 'neutral', subtitle, href }: St
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
       {content}
     </div>
   );
