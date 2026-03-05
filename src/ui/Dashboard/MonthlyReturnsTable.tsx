@@ -33,6 +33,7 @@ export function MonthlyReturnsTable({ data }: MonthlyReturnsTableProps) {
               <th className="text-right py-2 text-sm font-medium text-gray-400">CSP</th>
               <th className="text-right py-2 text-sm font-medium text-gray-400">CC</th>
               <th className="text-right py-2 text-sm font-medium text-gray-400">Long</th>
+              <th className="text-right py-2 text-sm font-medium text-red-400">Losses</th>
             </tr>
           </thead>
           <tbody>
@@ -61,6 +62,9 @@ export function MonthlyReturnsTable({ data }: MonthlyReturnsTableProps) {
                 }`}>
                   {row.long !== 0 ? formatCurrency(row.long) : '-'}
                 </td>
+                <td className="py-3 text-sm text-right text-red-400">
+                  {row.losses !== 0 ? formatCurrency(row.losses) : '-'}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -86,6 +90,9 @@ export function MonthlyReturnsTable({ data }: MonthlyReturnsTableProps) {
                 data.reduce((sum, r) => sum + r.long, 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
               }`}>
                 {formatCurrency(data.reduce((sum, r) => sum + r.long, 0))}
+              </td>
+              <td className="py-3 text-sm text-right font-semibold text-red-400">
+                {formatCurrency(data.reduce((sum, r) => sum + r.losses, 0))}
               </td>
             </tr>
           </tfoot>

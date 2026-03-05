@@ -21,6 +21,7 @@ export interface MonthlyData {
   csp: number;
   cc: number;
   long: number;
+  losses: number; // gross losses (negative value), shown as separate bar below zero
   total: number;
   returnPercent: number;
 }
@@ -83,21 +84,24 @@ export function calculateMonthlyPerformance(trades: Trade[]): MonthlyData[] {
   const closedTrades = trades.filter(t => t.status === 'closed' && t.realizedPL !== undefined);
 
   // Group by month
-  const monthlyMap = new Map<string, { csp: number; cc: number; long: number }>();
+  const monthlyMap = new Map<string, { csp: number; cc: number; long: number; losses: number }>();
 
   closedTrades.forEach(trade => {
     const date = new Date(trade.closedAt || trade.createdAt);
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
     if (!monthlyMap.has(monthKey)) {
-      monthlyMap.set(monthKey, { csp: 0, cc: 0, long: 0 });
+      monthlyMap.set(monthKey, { csp: 0, cc: 0, long: 0, losses: 0 });
     }
 
     const data = monthlyMap.get(monthKey)!;
     const pl = trade.realizedPL ?? 0;
     const strategy = trade.strategy.toLowerCase();
 
-    if (strategy === 'csp' || strategy.includes('put')) {
+    if (pl < 0) {
+      // All losses go into the losses bucket (rendered as negative bar below zero)
+      data.losses += pl;
+    } else if (strategy === 'csp' || strategy.includes('put')) {
       data.csp += pl;
     } else if (strategy === 'cc' || strategy.includes('call') || strategy.includes('covered')) {
       data.cc += pl;
@@ -118,7 +122,7 @@ export function calculateMonthlyPerformance(trades: Trade[]): MonthlyData[] {
       year: 'numeric',
     });
 
-    const total = data.csp + data.cc + data.long;
+    const total = data.csp + data.cc + data.long + data.losses;
 
     result.push({
       month,
@@ -126,6 +130,7 @@ export function calculateMonthlyPerformance(trades: Trade[]): MonthlyData[] {
       csp: data.csp,
       cc: data.cc,
       long: data.long,
+      losses: data.losses,
       total,
       returnPercent: 0, // Would need account value to calculate
     });

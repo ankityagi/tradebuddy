@@ -50,6 +50,7 @@ export function PerformanceChart({ data }: PerformanceChartProps) {
             />
             <Legend wrapperStyle={{ color: '#9CA3AF' }} />
             <ReferenceLine y={0} stroke="#6B7280" />
+            <Bar dataKey="losses" name="Losses" fill="#EF4444" stackId="a" />
             <Bar dataKey="csp" name="CSP" fill="#3B82F6" stackId="a" />
             <Bar dataKey="cc" name="Covered Call" fill="#10B981" stackId="a" />
             <Bar dataKey="long" name="Long Options" fill="#8B5CF6" stackId="a" />
