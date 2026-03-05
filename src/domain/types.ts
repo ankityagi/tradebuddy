@@ -141,6 +141,9 @@ export interface Trade {
   /** Realized profit/loss (calculated when closed) */
   realizedPL?: number;
 
+  /** Fees/commissions paid on entry */
+  fee?: number;
+
   /** Optional notes */
   notes?: string;
 

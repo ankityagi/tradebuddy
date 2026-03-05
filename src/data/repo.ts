@@ -82,6 +82,7 @@ function sheetTradeToTrade(sheetTrade: sheets.SheetTrade, ticker: string): Trade
     createdAt: sheetTrade.opened,
     updatedAt: sheetTrade.opened,
     realizedPL: sheetTrade.pnl ?? undefined,
+    fee: sheetTrade.fee ?? undefined,
     notes: sheetTrade.notes,
   };
 }

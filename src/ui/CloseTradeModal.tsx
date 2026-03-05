@@ -28,14 +28,16 @@ export function CloseTradeModal({ trade, onClose, onComplete }: CloseTradeModalP
 
   const multiplier = trade.legs[0]?.type === 'stock' ? 1 : 100;
 
+  const fee = trade.fee ?? 0;
+
   const calculateRealizedPL = (): number => {
     if (closeMethod === 'expired') {
-      return trade.entryPrice * trade.quantity * multiplier;
+      return trade.entryPrice * trade.quantity * multiplier - fee;
     }
     if (isCredit) {
-      return (trade.entryPrice - exitPrice) * trade.quantity * multiplier;
+      return (trade.entryPrice - exitPrice) * trade.quantity * multiplier - fee;
     }
-    return (exitPrice - trade.entryPrice) * trade.quantity * multiplier;
+    return (exitPrice - trade.entryPrice) * trade.quantity * multiplier - fee;
   };
 
   const realizedPL = calculateRealizedPL();
@@ -112,7 +114,8 @@ export function CloseTradeModal({ trade, onClose, onComplete }: CloseTradeModalP
 
             {closeMethod === 'expired' && (
               <div className="mb-4 p-3 bg-green-900/30 border border-green-700 rounded text-sm text-green-300">
-                Option expired worthless — you keep the full premium of ${(trade.entryPrice * trade.quantity * multiplier).toFixed(2)}.
+                Option expired worthless — premium ${(trade.entryPrice * trade.quantity * multiplier).toFixed(2)}
+                {fee > 0 ? ` − $${fee.toFixed(2)} fee = $${(trade.entryPrice * trade.quantity * multiplier - fee).toFixed(2)} profit` : ' kept as profit'}.
               </div>
             )}
 
@@ -137,7 +140,7 @@ export function CloseTradeModal({ trade, onClose, onComplete }: CloseTradeModalP
               <div className={`text-2xl font-bold ${realizedPL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {realizedPL >= 0 ? '+' : ''}${realizedPL.toFixed(2)}
               </div>
-              <div className="text-xs text-gray-500 mt-1">Verify with your broker. Fees not included.</div>
+              <div className="text-xs text-gray-500 mt-1">Verify with your broker.{fee === 0 ? ' No fees on record.' : ` Includes $${fee.toFixed(2)} fee.`}</div>
             </div>
 
             <div className="flex space-x-3">
