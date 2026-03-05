@@ -396,11 +396,12 @@ export async function updateTrade(
   ]);
 }
 
-// Close a trade (update Status and P/L columns)
+// Close a trade (update Status, Exit, and P/L columns)
 export async function closeTrade(
   spreadsheetId: string,
   ticker: string,
   tradeId: string,
+  exitPrice: number,
   pnl: number
 ): Promise<void> {
   const trades = await getTradesForTicker(spreadsheetId, ticker);
@@ -413,8 +414,9 @@ export async function closeTrade(
   await updateTrade(spreadsheetId, ticker, {
     ...trade,
     status: 'CLOSED',
+    exit: exitPrice,
     pnl,
-    dte: 0, // Expired
+    dte: 0,
   });
 }
 

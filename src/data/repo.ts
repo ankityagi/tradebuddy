@@ -317,7 +317,7 @@ export async function closeTrade(id: string, exitPrice: number, realizedPL: numb
     throw new Error(`Trade ${id} not found`);
   }
 
-  await sheets.closeTrade(spreadsheetId, existing.ticker, id, realizedPL);
+  await sheets.closeTrade(spreadsheetId, existing.ticker, id, exitPrice, realizedPL);
 }
 
 /**
