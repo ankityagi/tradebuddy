@@ -24,16 +24,16 @@ export function AllocationChart({ byTicker, byStrategy }: AllocationChartProps) 
   const isEmpty = data.length === 0;
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">Position Allocation</h3>
-        <div className="flex bg-gray-100 rounded-lg p-1">
+        <h3 className="text-lg font-semibold text-white">Position Allocation</h3>
+        <div className="flex bg-gray-900 rounded-lg p-1">
           <button
             onClick={() => setViewMode('ticker')}
             className={`px-3 py-1 text-sm rounded-md transition-colors ${
               viewMode === 'ticker'
-                ? 'bg-white text-gray-900 shadow'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-gray-700 text-white'
+                : 'text-gray-400 hover:text-white'
             }`}
           >
             By Ticker
@@ -42,8 +42,8 @@ export function AllocationChart({ byTicker, byStrategy }: AllocationChartProps) 
             onClick={() => setViewMode('strategy')}
             className={`px-3 py-1 text-sm rounded-md transition-colors ${
               viewMode === 'strategy'
-                ? 'bg-white text-gray-900 shadow'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-gray-700 text-white'
+                : 'text-gray-400 hover:text-white'
             }`}
           >
             By Strategy
@@ -75,8 +75,10 @@ export function AllocationChart({ byTicker, byStrategy }: AllocationChartProps) 
               </Pie>
               <Tooltip
                 formatter={(value: number) => formatCurrency(value)}
+                contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                labelStyle={{ color: '#F9FAFB' }}
               />
-              <Legend />
+              <Legend wrapperStyle={{ color: '#9CA3AF' }} />
             </PieChart>
           </ResponsiveContainer>
         )}

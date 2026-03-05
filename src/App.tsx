@@ -5,10 +5,10 @@ import { Dashboard } from './ui/Dashboard';
 import { TradesTable } from './ui/TradesTable';
 import { TradeForm } from './ui/TradeForm';
 import { PastePanel } from './ui/PastePanel';
-import { SignIn } from './ui/SignIn';
 import { SheetSetup } from './ui/SheetSetup';
 import { Privacy } from './ui/Privacy';
 import { Terms } from './ui/Terms';
+import { LandingPage } from './ui/LandingPage';
 
 function Navigation() {
   const location = useLocation();
@@ -19,41 +19,44 @@ function Navigation() {
   };
 
   return (
-    <nav className="bg-blue-600 text-white shadow-lg">
-      <div className="container mx-auto px-4 py-4">
+    <nav className="bg-gray-900 border-b border-gray-800 text-white">
+      <div className="container mx-auto px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-8">
-            <h1 className="text-2xl font-bold">TradeBuddy</h1>
+            <Link to="/" className="flex items-center gap-3">
+              <img src="/logo.svg" alt="TradeBuddy" className="w-8 h-8" />
+              <span className="text-xl font-bold">TradeBuddy</span>
+            </Link>
             {user && sheetUrl && (
-              <div className="flex space-x-4">
+              <div className="flex space-x-1">
                 <Link
                   to="/"
-                  className={`px-4 py-2 rounded transition-colors ${
-                    isActive('/') ? 'bg-blue-700 font-semibold' : 'hover:bg-blue-500'
+                  className={`px-4 py-2 rounded-lg transition-colors ${
+                    isActive('/') ? 'bg-emerald-500/20 text-emerald-400 font-semibold' : 'text-gray-400 hover:text-white hover:bg-gray-800'
                   }`}
                 >
                   Dashboard
                 </Link>
                 <Link
                   to="/trades"
-                  className={`px-4 py-2 rounded transition-colors ${
-                    isActive('/trades') ? 'bg-blue-700 font-semibold' : 'hover:bg-blue-500'
+                  className={`px-4 py-2 rounded-lg transition-colors ${
+                    isActive('/trades') ? 'bg-emerald-500/20 text-emerald-400 font-semibold' : 'text-gray-400 hover:text-white hover:bg-gray-800'
                   }`}
                 >
                   My Trades
                 </Link>
                 <Link
                   to="/new"
-                  className={`px-4 py-2 rounded transition-colors ${
-                    isActive('/new') ? 'bg-blue-700 font-semibold' : 'hover:bg-blue-500'
+                  className={`px-4 py-2 rounded-lg transition-colors ${
+                    isActive('/new') ? 'bg-emerald-500/20 text-emerald-400 font-semibold' : 'text-gray-400 hover:text-white hover:bg-gray-800'
                   }`}
                 >
                   New Trade
                 </Link>
                 <Link
                   to="/paste"
-                  className={`px-4 py-2 rounded transition-colors ${
-                    isActive('/paste') ? 'bg-blue-700 font-semibold' : 'hover:bg-blue-500'
+                  className={`px-4 py-2 rounded-lg transition-colors ${
+                    isActive('/paste') ? 'bg-emerald-500/20 text-emerald-400 font-semibold' : 'text-gray-400 hover:text-white hover:bg-gray-800'
                   }`}
                 >
                   Paste Trade
@@ -68,14 +71,14 @@ function Navigation() {
                   <img
                     src={user.picture}
                     alt={user.name}
-                    className="w-8 h-8 rounded-full"
+                    className="w-8 h-8 rounded-full ring-2 ring-gray-700"
                   />
-                  <span className="text-sm hidden sm:inline">{user.email}</span>
+                  <span className="text-sm text-gray-400 hidden sm:inline">{user.email}</span>
                 </div>
                 {sheetUrl && (
                   <button
                     onClick={disconnectSheet}
-                    className="text-sm opacity-75 hover:opacity-100"
+                    className="text-sm text-gray-400 hover:text-white transition-colors"
                     title="Disconnect sheet"
                   >
                     Change Sheet
@@ -83,13 +86,13 @@ function Navigation() {
                 )}
                 <button
                   onClick={signOut}
-                  className="text-sm bg-blue-700 px-3 py-1 rounded hover:bg-blue-800"
+                  className="text-sm bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition-colors"
                 >
                   Sign Out
                 </button>
               </>
             ) : (
-              <span className="text-sm opacity-75">Google Sheets Powered</span>
+              <span className="text-sm text-gray-500">Google Sheets Powered</span>
             )}
           </div>
         </div>
@@ -113,24 +116,17 @@ function AppContent() {
     );
   }
 
-  // Not signed in - show sign in page
+  // Not signed in - show landing page
   if (!isSignedIn) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Navigation />
-        <main className="container mx-auto px-4 py-8">
-          <SignIn />
-        </main>
-      </div>
-    );
+    return <LandingPage />;
   }
 
   // Signed in but no sheet connected - show setup page
   if (!sheetUrl) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-900">
         <Navigation />
-        <main className="container mx-auto px-4 py-8">
+        <main className="container mx-auto px-6 py-8">
           <SheetSetup />
         </main>
       </div>
@@ -139,9 +135,9 @@ function AppContent() {
 
   // Fully authenticated with sheet - show main app
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-900">
       <Navigation />
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-6 py-8">
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/trades" element={<TradesTable />} />

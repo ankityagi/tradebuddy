@@ -338,7 +338,7 @@ export function TradesTable() {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="text-gray-600">Loading trades...</div>
+        <div className="text-gray-400">Loading trades...</div>
       </div>
     );
   }
@@ -356,21 +356,21 @@ export function TradesTable() {
           {currentView !== 'all' && (
             <Link
               to="/"
-              className="text-blue-600 hover:text-blue-800 text-sm mb-1 inline-block"
+              className="text-emerald-400 hover:text-emerald-300 text-sm mb-1 inline-block"
             >
               &larr; Back to Dashboard
             </Link>
           )}
-          <h2 className="text-3xl font-bold">{viewConfig.title}</h2>
+          <h2 className="text-3xl font-bold text-white">{viewConfig.title}</h2>
           {viewConfig.description && (
-            <p className="text-gray-600 mt-1">{viewConfig.description}</p>
+            <p className="text-gray-400 mt-1">{viewConfig.description}</p>
           )}
         </div>
         <div className="flex gap-3">
           {currentView !== 'all' && (
             <button
               onClick={clearView}
-              className="px-4 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-semibold"
+              className="px-4 py-3 bg-gray-700 text-white rounded-xl hover:bg-gray-600 transition-colors font-semibold"
             >
               View All Trades
             </button>
@@ -378,13 +378,13 @@ export function TradesTable() {
           <button
             onClick={handleRefreshGreeks}
             disabled={calculatingGreeks}
-            className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {calculatingGreeks ? greeksProgress || 'Calculating...' : '📊 Refresh Greeks'}
           </button>
           <Link
             to="/new"
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+            className="px-6 py-3 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors font-semibold"
           >
             + New Trade
           </Link>
@@ -393,18 +393,18 @@ export function TradesTable() {
 
       {/* Summary Card for specific views */}
       {viewTotal && (
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-lg shadow-lg mb-6">
+        <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white p-6 rounded-xl mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-blue-100 text-sm uppercase tracking-wide">{viewConfig.title}</p>
+              <p className="text-emerald-100 text-sm uppercase tracking-wide">{viewConfig.title}</p>
               <p className={`text-4xl font-bold mt-1 ${
                 viewTotal.value.startsWith('-') ? 'text-red-300' : ''
               }`}>
                 {viewTotal.value}
               </p>
-              <p className="text-blue-200 text-sm mt-1">{viewTotal.detail}</p>
+              <p className="text-emerald-200 text-sm mt-1">{viewTotal.detail}</p>
             </div>
-            <div className="text-blue-200">
+            <div className="text-emerald-200">
               <p className="text-sm">Trades shown below contribute to this total.</p>
               <p className="text-sm">Verify by summing the highlighted column.</p>
             </div>
@@ -413,15 +413,15 @@ export function TradesTable() {
       )}
 
       {/* Filters */}
-      <div className="bg-white p-4 rounded-lg shadow mb-6">
+      <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {currentView === 'all' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+              <label className="block text-sm font-medium text-gray-400 mb-1">Status</label>
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value as FilterStatus)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               >
                 <option value="all">All</option>
                 <option value="open">Open</option>
@@ -431,18 +431,18 @@ export function TradesTable() {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Ticker</label>
+            <label className="block text-sm font-medium text-gray-400 mb-1">Ticker</label>
             <input
               type="text"
               value={filterTicker}
               onChange={(e) => setFilterTicker(e.target.value)}
               placeholder="Filter by ticker..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
             />
           </div>
 
           <div className="flex items-end">
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-gray-400">
               Showing {filteredTrades.length} of {viewFilteredTrades.length} trades
               {currentView !== 'all' && ` (${trades.length} total)`}
             </div>
@@ -452,101 +452,101 @@ export function TradesTable() {
 
       {/* Table */}
       {filteredTrades.length === 0 ? (
-        <div className="bg-white p-12 rounded-lg shadow text-center">
-          <p className="text-gray-600 text-lg mb-4">No trades found</p>
+        <div className="bg-gray-800 p-12 rounded-xl border border-gray-700 text-center">
+          <p className="text-gray-400 text-lg mb-4">No trades found</p>
           <Link
             to="/new"
-            className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="inline-block px-6 py-3 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors"
           >
             Create Your First Trade
           </Link>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-x-auto">
+        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-gray-900 border-b border-gray-700">
               <tr>
                 <th
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-800"
                   onClick={() => toggleSort('ticker')}
                 >
                   Ticker {sortField === 'ticker' && (sortOrder === 'asc' ? '↑' : '↓')}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   Strategy
                 </th>
                 <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${
                   currentView === 'totalPremium' || currentView === 'outstandingPremium'
-                    ? 'text-blue-700 bg-blue-50'
-                    : 'text-gray-500'
+                    ? 'text-emerald-400 bg-emerald-500/10'
+                    : 'text-gray-400'
                 }`}>
                   Entry {(currentView === 'totalPremium' || currentView === 'outstandingPremium') && '*'}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   Delta
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   IV
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   DTE
                 </th>
                 <th
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-800"
                   onClick={() => toggleSort('rr')}
                 >
                   R/R {sortField === 'rr' && (sortOrder === 'asc' ? '↑' : '↓')}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   Status
                 </th>
                 <th
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-800"
                   onClick={() => toggleSort('createdAt')}
                 >
                   Created {sortField === 'createdAt' && (sortOrder === 'asc' ? '↑' : '↓')}
                 </th>
                 <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${
                   currentView === 'realizedPL' || currentView === 'winRate'
-                    ? 'text-blue-700 bg-blue-50'
-                    : 'text-gray-500'
+                    ? 'text-emerald-400 bg-emerald-500/10'
+                    : 'text-gray-400'
                 }`}>
                   P/L {(currentView === 'realizedPL' || currentView === 'winRate') && '*'}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="divide-y divide-gray-700">
               {filteredTrades.map((trade) => (
-                <tr key={trade.id} className="hover:bg-gray-50">
+                <tr key={trade.id} className="hover:bg-gray-700/30">
                   <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{trade.ticker}</div>
+                    <div className="text-sm font-medium text-white">{trade.ticker}</div>
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{trade.strategy}</div>
+                    <div className="text-sm text-gray-300">{trade.strategy}</div>
                   </td>
                   <td className={`px-4 py-4 whitespace-nowrap ${
                     currentView === 'totalPremium' || currentView === 'outstandingPremium'
-                      ? 'bg-blue-50'
+                      ? 'bg-emerald-500/10'
                       : ''
                   }`}>
                     <div className={`text-sm ${
                       currentView === 'totalPremium' || currentView === 'outstandingPremium'
-                        ? 'text-blue-700 font-semibold'
-                        : 'text-gray-900'
+                        ? 'text-emerald-400 font-semibold'
+                        : 'text-gray-300'
                     }`}>{formatCurrency(trade.entryPrice)}</div>
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
+                    <div className="text-sm text-gray-300">
                       {trade.metrics.delta !== undefined
                         ? trade.metrics.delta.toFixed(2)
                         : 'N/A'}
                     </div>
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
+                    <div className="text-sm text-gray-300">
                       {trade.metrics.iv !== undefined
                         ? `${trade.metrics.iv.toFixed(1)}%`
                         : 'N/A'}
@@ -557,16 +557,16 @@ export function TradesTable() {
                       (() => {
                         const dte = calculateDTE(trade);
                         if (dte === null) return 'text-gray-500';
-                        if (dte <= 7) return 'text-red-600';
-                        if (dte <= 14) return 'text-orange-500';
-                        return 'text-gray-900';
+                        if (dte <= 7) return 'text-red-400';
+                        if (dte <= 14) return 'text-orange-400';
+                        return 'text-gray-300';
                       })()
                     }`}>
                       {calculateDTE(trade) ?? 'N/A'}
                     </div>
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
+                    <div className="text-sm text-gray-300">
                       {trade.metrics.rr?.toFixed(2) ?? 'N/A'}
                     </div>
                   </td>
@@ -574,8 +574,8 @@ export function TradesTable() {
                     <span
                       className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         trade.status === 'open'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
+                          ? 'bg-emerald-500/20 text-emerald-400'
+                          : 'bg-gray-700 text-gray-400'
                       }`}
                     >
                       {trade.status}
@@ -586,15 +586,15 @@ export function TradesTable() {
                   </td>
                   <td className={`px-4 py-4 whitespace-nowrap ${
                     currentView === 'realizedPL' || currentView === 'winRate'
-                      ? 'bg-blue-50'
+                      ? 'bg-emerald-500/10'
                       : ''
                   }`}>
                     <div
                       className={`text-sm font-medium ${
                         trade.realizedPL !== undefined
                           ? trade.realizedPL >= 0
-                            ? 'text-green-600'
-                            : 'text-red-600'
+                            ? 'text-emerald-400'
+                            : 'text-red-400'
                           : 'text-gray-500'
                       }`}
                     >
@@ -603,24 +603,24 @@ export function TradesTable() {
                         : calculateUnrealizedPL()}
                     </div>
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm font-medium space-x-3">
                     {trade.status === 'open' && (
                       <button
                         onClick={() => handleCloseTrade(trade)}
-                        className="text-blue-600 hover:text-blue-900"
+                        className="text-blue-400 hover:text-blue-300"
                       >
                         Close
                       </button>
                     )}
                     <Link
                       to={`/edit/${trade.id}`}
-                      className="text-indigo-600 hover:text-indigo-900"
+                      className="text-gray-400 hover:text-white"
                     >
                       Edit
                     </Link>
                     <button
                       onClick={() => handleDelete(trade.id)}
-                      className="text-red-600 hover:text-red-900"
+                      className="text-red-400 hover:text-red-300"
                     >
                       Delete
                     </button>
