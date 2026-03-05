@@ -7,6 +7,8 @@ import type { Trade } from '../../domain/types';
 export interface DashboardStats {
   realizedPL: number;
   totalPremium: number;
+  premiumCollected: number;
+  premiumPaid: number;
   unrealizedPL: number | null;
   outstandingPremium: number;
   winRate: number;
@@ -42,14 +44,16 @@ export function calculateStats(trades: Trade[]): DashboardStats {
   // Realized P&L from closed trades
   const realizedPL = closedTrades.reduce((sum, t) => sum + (t.realizedPL ?? 0), 0);
 
-  // Total premium collected from sell trades
-  // entryPrice is the premium value from the "Premium ($)" column - already in dollars
-  const totalPremium = trades
-    .filter(t => {
-      const leg = t.legs[0];
-      return leg?.side === 'sell';
-    })
+  // Premium collected from sell trades vs paid on buy trades
+  const premiumCollected = trades
+    .filter(t => t.legs[0]?.side === 'sell')
     .reduce((sum, t) => sum + (t.entryPrice * t.quantity), 0);
+
+  const premiumPaid = trades
+    .filter(t => t.legs[0]?.side === 'buy')
+    .reduce((sum, t) => sum + (t.entryPrice * t.quantity), 0);
+
+  const totalPremium = premiumCollected;
 
   // Outstanding premium from open sell trades
   const outstandingPremium = openTrades
@@ -68,6 +72,8 @@ export function calculateStats(trades: Trade[]): DashboardStats {
   return {
     realizedPL,
     totalPremium,
+    premiumCollected,
+    premiumPaid,
     unrealizedPL: null, // Needs market data
     outstandingPremium,
     winRate,
