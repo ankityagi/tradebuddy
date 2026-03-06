@@ -2,11 +2,11 @@ import React from 'react';
 import {
   BarChart,
   Bar,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
@@ -15,6 +15,37 @@ import { formatCurrency } from './utils';
 
 interface PerformanceChartProps {
   data: MonthlyData[];
+}
+
+interface TooltipPayload {
+  payload: MonthlyData;
+}
+
+function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: TooltipPayload[]; label?: string }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+
+  const rows: { label: string; value: number; color: string }[] = [];
+  if (d.cc !== 0) rows.push({ label: 'Covered Call', value: d.cc, color: '#10B981' });
+  if (d.csp !== 0) rows.push({ label: 'CSP', value: d.csp, color: '#3B82F6' });
+  if (d.long !== 0) rows.push({ label: 'Long Options', value: d.long, color: '#8B5CF6' });
+  if (d.losses !== 0) rows.push({ label: 'Losses', value: d.losses, color: '#EF4444' });
+
+  return (
+    <div style={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px', padding: '10px 14px' }}>
+      <p style={{ color: '#F9FAFB', fontWeight: 600, marginBottom: 6 }}>{label}</p>
+      {rows.map(r => (
+        <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 24, marginBottom: 2 }}>
+          <span style={{ color: r.color, fontSize: 12 }}>{r.label}</span>
+          <span style={{ color: '#F9FAFB', fontSize: 12 }}>{formatCurrency(r.value)}</span>
+        </div>
+      ))}
+      <div style={{ borderTop: '1px solid #374151', marginTop: 6, paddingTop: 6, display: 'flex', justifyContent: 'space-between', gap: 24 }}>
+        <span style={{ color: '#9CA3AF', fontSize: 12 }}>Net P&L</span>
+        <span style={{ color: d.total >= 0 ? '#10B981' : '#EF4444', fontWeight: 600, fontSize: 12 }}>{formatCurrency(d.total)}</span>
+      </div>
+    </div>
+  );
 }
 
 export function PerformanceChart({ data }: PerformanceChartProps) {
@@ -42,18 +73,16 @@ export function PerformanceChart({ data }: PerformanceChartProps) {
               tick={{ fontSize: 12, fill: '#9CA3AF' }}
               stroke="#4B5563"
             />
-            <Tooltip
-              formatter={(value: number) => formatCurrency(value)}
-              labelFormatter={(label) => label}
-              contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-              labelStyle={{ color: '#F9FAFB' }}
-            />
-            <Legend wrapperStyle={{ color: '#9CA3AF' }} />
+            <Tooltip content={<CustomTooltip />} />
             <ReferenceLine y={0} stroke="#6B7280" />
-            <Bar dataKey="losses" name="Losses" fill="#EF4444" stackId="losses" />
-            <Bar dataKey="csp" name="CSP" fill="#3B82F6" stackId="gains" />
-            <Bar dataKey="cc" name="Covered Call" fill="#10B981" stackId="gains" />
-            <Bar dataKey="long" name="Long Options" fill="#8B5CF6" stackId="gains" />
+            <Bar dataKey="total" name="Net P&L" radius={[3, 3, 0, 0]}>
+              {data.map((entry) => (
+                <Cell
+                  key={entry.month}
+                  fill={entry.total >= 0 ? '#10B981' : '#EF4444'}
+                />
+              ))}
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>

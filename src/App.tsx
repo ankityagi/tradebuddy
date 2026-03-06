@@ -9,6 +9,7 @@ import { SheetSetup } from './ui/SheetSetup';
 import { Privacy } from './ui/Privacy';
 import { Terms } from './ui/Terms';
 import { LandingPage } from './ui/LandingPage';
+import { StrategiesPage } from './ui/Strategies';
 
 function Navigation() {
   const location = useLocation();
@@ -60,6 +61,14 @@ function Navigation() {
                   }`}
                 >
                   Paste Trade
+                </Link>
+                <Link
+                  to="/strategies"
+                  className={`px-4 py-2 rounded-lg transition-colors ${
+                    isActive('/strategies') ? 'bg-emerald-500/20 text-emerald-400 font-semibold' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                  }`}
+                >
+                  Strategies
                 </Link>
               </div>
             )}
@@ -144,6 +153,7 @@ function AppContent() {
           <Route path="/new" element={<TradeForm />} />
           <Route path="/edit/:id" element={<TradeForm />} />
           <Route path="/paste" element={<PastePanel />} />
+          <Route path="/strategies" element={<StrategiesPage />} />
         </Routes>
       </main>
     </div>

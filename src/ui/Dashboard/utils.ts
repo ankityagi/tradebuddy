@@ -2,7 +2,8 @@
  * Dashboard calculation utilities
  */
 
-import type { Trade } from '../../domain/types';
+import type { Trade, Campaign } from '../../domain/types';
+import { campaignNetPL } from '../../domain/campaigns';
 
 export interface DashboardStats {
   realizedPL: number;
@@ -143,6 +144,31 @@ export function calculateMonthlyPerformance(trades: Trade[]): MonthlyData[] {
   });
 
   return result;
+}
+
+export interface CampaignStats {
+  totalCampaigns: number;
+  activeCampaigns: number;
+  completedCampaigns: number;
+  campaignWinRate: number; // % of completed campaigns that were profitable
+  totalCampaignPL: number;
+}
+
+/**
+ * Calculate campaign-level statistics
+ */
+export function calculateCampaignStats(campaigns: Campaign[], trades: Trade[]): CampaignStats {
+  const completed = campaigns.filter(c => c.status === 'completed');
+  const wins = completed.filter(c => campaignNetPL(c, trades) > 0);
+  const totalPL = campaigns.reduce((sum, c) => sum + campaignNetPL(c, trades), 0);
+
+  return {
+    totalCampaigns: campaigns.length,
+    activeCampaigns: campaigns.filter(c => c.status === 'active').length,
+    completedCampaigns: completed.length,
+    campaignWinRate: completed.length > 0 ? (wins.length / completed.length) * 100 : 0,
+    totalCampaignPL: totalPL,
+  };
 }
 
 /**
