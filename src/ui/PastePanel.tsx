@@ -70,7 +70,15 @@ export function PastePanel() {
 
   function getInferredRole(trade: ParsedTrade): Trade['tradeRole'] {
     const optionType = trade.type === 'call' ? 'call' : 'put';
-    const side = trade.action === 'sell' ? 'sell' : 'buy';
+    // Infer side from action, symbol prefix ('-' = short/sell), or amountSign ('+' = credit received = sell)
+    let side: 'buy' | 'sell' = 'buy';
+    if (trade.action === 'sell') {
+      side = 'sell';
+    } else if (trade.symbol?.startsWith('-')) {
+      side = 'sell';
+    } else if (trade.amountSign === '+') {
+      side = 'sell';
+    }
     let dte: number | undefined;
     if (trade.expiry) {
       const days = Math.ceil((new Date(trade.expiry).getTime() - Date.now()) / 86400000);
