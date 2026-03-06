@@ -27,6 +27,70 @@ export type Strategy =
   | 'straddle' // Straddle
   | 'custom'; // Custom multi-leg strategy
 
+// ---------------------------------------------------------------------------
+// Campaign types (Wheel and PMCC multi-trade strategy tracking)
+// ---------------------------------------------------------------------------
+
+export type CampaignType = 'wheel' | 'pmcc';
+
+export type CampaignStatus = 'active' | 'completed';
+
+/** Wheel phases in order */
+export type WheelPhase =
+  | 'selling_puts'   // Selling CSPs, not yet assigned
+  | 'assigned'       // Got assigned — now hold 100 shares per contract
+  | 'selling_calls'  // Selling CCs against the position
+  | 'called_away'    // Stock called away at CC strike — cycle complete
+  | 'exited';        // Manually closed/rolled out early
+
+/** PMCC phases in order */
+export type PMCCPhase =
+  | 'leaps_open'     // LEAPS purchased, not yet selling short calls
+  | 'selling_calls'  // Actively selling short-dated calls against LEAPS
+  | 'closed';        // LEAPS sold / position fully closed
+
+/** Role a trade plays within a campaign */
+export type TradeRole =
+  | 'csp'        // Wheel: cash-secured put
+  | 'cc'         // Wheel: covered call
+  | 'roll'       // Either: net roll transaction (BTC + STO as one entry)
+  | 'assignment' // Wheel: assignment event (transitions phase, no P/L entry)
+  | 'leaps'      // PMCC: the long LEAPS leg
+  | 'short_call'; // PMCC: recurring short call
+
+/**
+ * A Campaign groups all trades belonging to one continuous run of the
+ * Wheel or PMCC strategy on a single ticker.
+ */
+export interface Campaign {
+  id: string;
+  ticker: string;
+  type: CampaignType;
+  status: CampaignStatus;
+  phase: WheelPhase | PMCCPhase;
+
+  /** Ordered list of trade IDs belonging to this campaign */
+  tradeIds: string[];
+
+  // Wheel-specific fields
+  /** Strike price at which CSP was assigned */
+  assignedStrike?: number;
+  /** Date of assignment (ISO 8601) */
+  assignedAt?: string;
+
+  // PMCC-specific fields
+  /** Purchase price per share of the LEAPS */
+  leapsCost?: number;
+  leapsStrike?: number;
+  leapsExpiry?: string;
+
+  startedAt: string;
+  completedAt?: string;
+  notes?: string;
+}
+
+export type CreateCampaignInput = Omit<Campaign, 'id'>;
+
 /**
  * Trade status
  */
@@ -149,6 +213,12 @@ export interface Trade {
 
   /** Source of the trade data */
   source?: TradeSource;
+
+  /** Campaign this trade belongs to (Wheel or PMCC), if any */
+  campaignId?: string;
+
+  /** Role this trade plays within the campaign */
+  tradeRole?: TradeRole;
 }
 
 /**

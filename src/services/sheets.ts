@@ -8,10 +8,12 @@ const SHEETS_API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
 // Sheet tab names
 export const SUMMARY_TAB = 'Summary';
 export const TEMPLATE_TAB = 'Template';
+export const CAMPAIGNS_TAB = 'Campaigns';
 
 // Actual Trade Log columns from user's sheet:
 // A: Ticker, B: Type, C: Strike, D: Qty, E: Delta, F: IV, G: Opened,
-// H: Expiry, I: DTE, J: Premium ($), K: Exit, L: Fee, M: P/L, N: ROI, O: Status, P: Helper
+// H: Expiry, I: DTE, J: Premium ($), K: Exit, L: Fee, M: P/L, N: ROI,
+// O: Status, P: Notes, Q: CampaignID, R: TradeRole
 
 export interface SheetTrade {
   id: string;           // Generated from row index
@@ -30,7 +32,31 @@ export interface SheetTrade {
   pnl: number | null;   // Column M (P/L)
   roi: number | null;   // Column N (ROI %)
   status: string;       // Column O (Open/Closed)
-  notes: string;        // Column P (Helper/Notes)
+  notes: string;        // Column P (Notes)
+  campaignId?: string;  // Column Q (CampaignID — optional)
+  tradeRole?: string;   // Column R (TradeRole — optional)
+}
+
+// Campaigns tab columns:
+// A: ID, B: Ticker, C: Type, D: Status, E: Phase, F: TradeIDs (comma-separated),
+// G: AssignedStrike, H: AssignedAt, I: LeapsCost, J: LeapsStrike, K: LeapsExpiry,
+// L: StartedAt, M: CompletedAt, N: Notes
+
+export interface SheetCampaign {
+  id: string;
+  ticker: string;
+  type: string;           // 'wheel' | 'pmcc'
+  status: string;         // 'active' | 'completed'
+  phase: string;
+  tradeIds: string;       // comma-separated list of trade IDs
+  assignedStrike: number | null;
+  assignedAt: string;
+  leapsCost: number | null;
+  leapsStrike: number | null;
+  leapsExpiry: string;
+  startedAt: string;
+  completedAt: string;
+  notes: string;
 }
 
 // Make authenticated request to Sheets API
@@ -210,9 +236,10 @@ export async function initializeTickerTab(
   } else {
     // Fallback: create tab manually (no formulas)
     await createTab(spreadsheetId, ticker);
-    await writeRange(spreadsheetId, `${ticker}!A1:P1`, [[
+    await writeRange(spreadsheetId, `${ticker}!A1:R1`, [[
       'Ticker', 'Type', 'Strike', 'Qty', 'Delta', 'IV', 'Opened',
-      'Expiry', 'DTE', 'Premium ($)', 'Exit', 'Fee', 'P/L', 'ROI', 'Status', 'Notes'
+      'Expiry', 'DTE', 'Premium ($)', 'Exit', 'Fee', 'P/L', 'ROI', 'Status', 'Notes',
+      'CampaignID', 'TradeRole',
     ]]);
   }
 }
@@ -251,8 +278,8 @@ export async function getTradesForTicker(
     return [];
   }
 
-  // Read columns A through P (row 1 is header, data starts at row 2)
-  const rows = await readRange(spreadsheetId, `${ticker}!A2:P1000`);
+  // Read columns A through R (row 1 is header, data starts at row 2)
+  const rows = await readRange(spreadsheetId, `${ticker}!A2:R1000`);
 
   return rows
     // First map to include original row number, then filter, then extract
@@ -280,14 +307,18 @@ export async function getTradesForTicker(
       pnl: row[12] ? parseNum(row[12]) : null,   // Column M: P/L
       roi: row[13] ? parseNum(row[13].toString().replace('%', '')) : null, // Column N: ROI %
       status: row[14] || 'Open',     // Column O: Status
-      notes: row[15] || '',          // Column P: Helper/Notes
+      notes: row[15] || '',          // Column P: Notes
+      campaignId: row[16] || undefined, // Column Q: CampaignID
+      tradeRole: row[17] || undefined,  // Column R: TradeRole
     }));
 }
 
 // Get all trades from all ticker tabs
 export async function getAllTrades(spreadsheetId: string): Promise<Map<string, SheetTrade[]>> {
   const tabs = await getSheetTabs(spreadsheetId);
-  const tickerTabs = tabs.filter(t => t !== SUMMARY_TAB && t !== TEMPLATE_TAB);
+  const tickerTabs = tabs.filter(t =>
+    t !== SUMMARY_TAB && t !== TEMPLATE_TAB && t !== CAMPAIGNS_TAB
+  );
 
   const allTrades = new Map<string, SheetTrade[]>();
 
@@ -362,10 +393,12 @@ export async function addTrade(
     console.warn('Could not copy P/L and ROI formulas from Template:', error);
   }
 
-  // Write status column (O)
-  await writeRange(spreadsheetId, `${ticker}!O${rowNum}:P${rowNum}`, [[
-    trade.status,      // O: Status
-    trade.notes,       // P: Helper/Notes
+  // Write status, notes, and campaign columns (O–R)
+  await writeRange(spreadsheetId, `${ticker}!O${rowNum}:R${rowNum}`, [[
+    trade.status,                  // O: Status
+    trade.notes,                   // P: Notes
+    trade.campaignId ?? '',        // Q: CampaignID
+    trade.tradeRole ?? '',         // R: TradeRole
   ]]);
 
   return id;
@@ -384,24 +417,26 @@ export async function updateTrade(
   }
   const actualRow = parseInt(rowMatch[1]);
 
-  await writeRange(spreadsheetId, `${ticker}!A${actualRow}:P${actualRow}`, [
+  await writeRange(spreadsheetId, `${ticker}!A${actualRow}:R${actualRow}`, [
     [
-      trade.ticker,      // A: Ticker
-      trade.type,        // B: Type
-      trade.strike,      // C: Strike
-      trade.qty,         // D: Qty
-      trade.delta,       // E: Delta
-      trade.iv ?? '',    // F: IV
-      trade.opened,      // G: Opened
-      trade.expiry,      // H: Expiry
-      trade.dte ?? '',   // I: DTE
-      trade.premium ?? '', // J: Premium ($)
-      trade.exit ?? '',  // K: Exit
-      trade.fee ?? '',   // L: Fee
-      trade.pnl ?? '',   // M: P/L
-      trade.roi ?? '',   // N: ROI
-      trade.status,      // O: Status
-      trade.notes,       // P: Helper/Notes
+      trade.ticker,              // A: Ticker
+      trade.type,                // B: Type
+      trade.strike,              // C: Strike
+      trade.qty,                 // D: Qty
+      trade.delta,               // E: Delta
+      trade.iv ?? '',            // F: IV
+      trade.opened,              // G: Opened
+      trade.expiry,              // H: Expiry
+      trade.dte ?? '',           // I: DTE
+      trade.premium ?? '',       // J: Premium ($)
+      trade.exit ?? '',          // K: Exit
+      trade.fee ?? '',           // L: Fee
+      trade.pnl ?? '',           // M: P/L
+      trade.roi ?? '',           // N: ROI
+      trade.status,              // O: Status
+      trade.notes,               // P: Notes
+      trade.campaignId ?? '',    // Q: CampaignID
+      trade.tradeRole ?? '',     // R: TradeRole
     ],
   ]);
 }
@@ -508,4 +543,95 @@ export async function batchUpdateGreeks(
       await writeRange(spreadsheetId, `${ticker}!N${row}`, [[rrFormatted]]);
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Campaign CRUD
+// ---------------------------------------------------------------------------
+
+async function initializeCampaignsTab(spreadsheetId: string): Promise<void> {
+  const tabs = await getSheetTabs(spreadsheetId);
+  if (!tabs.includes(CAMPAIGNS_TAB)) {
+    await createTab(spreadsheetId, CAMPAIGNS_TAB);
+    await writeRange(spreadsheetId, `${CAMPAIGNS_TAB}!A1:N1`, [[
+      'ID', 'Ticker', 'Type', 'Status', 'Phase', 'TradeIDs',
+      'AssignedStrike', 'AssignedAt', 'LeapsCost', 'LeapsStrike', 'LeapsExpiry',
+      'StartedAt', 'CompletedAt', 'Notes',
+    ]]);
+  }
+}
+
+export async function readCampaigns(spreadsheetId: string): Promise<SheetCampaign[]> {
+  const tabs = await getSheetTabs(spreadsheetId);
+  if (!tabs.includes(CAMPAIGNS_TAB)) return [];
+
+  const rows = await readRange(spreadsheetId, `${CAMPAIGNS_TAB}!A2:N1000`);
+  return rows
+    .filter(row => row[0] && row[0].toString().trim() !== '')
+    .map(row => ({
+      id: row[0] || '',
+      ticker: row[1] || '',
+      type: row[2] || 'wheel',
+      status: row[3] || 'active',
+      phase: row[4] || 'selling_puts',
+      tradeIds: row[5] || '',
+      assignedStrike: row[6] ? parseNum(row[6]) : null,
+      assignedAt: row[7] || '',
+      leapsCost: row[8] ? parseNum(row[8]) : null,
+      leapsStrike: row[9] ? parseNum(row[9]) : null,
+      leapsExpiry: row[10] || '',
+      startedAt: row[11] || '',
+      completedAt: row[12] || '',
+      notes: row[13] || '',
+    }));
+}
+
+export async function writeCampaign(
+  spreadsheetId: string,
+  campaign: SheetCampaign
+): Promise<void> {
+  await initializeCampaignsTab(spreadsheetId);
+  await appendRow(spreadsheetId, CAMPAIGNS_TAB, [
+    campaign.id,
+    campaign.ticker,
+    campaign.type,
+    campaign.status,
+    campaign.phase,
+    campaign.tradeIds,
+    campaign.assignedStrike ?? '',
+    campaign.assignedAt,
+    campaign.leapsCost ?? '',
+    campaign.leapsStrike ?? '',
+    campaign.leapsExpiry,
+    campaign.startedAt,
+    campaign.completedAt,
+    campaign.notes,
+  ]);
+}
+
+export async function updateCampaign(
+  spreadsheetId: string,
+  campaign: SheetCampaign
+): Promise<void> {
+  const rows = await readRange(spreadsheetId, `${CAMPAIGNS_TAB}!A2:A1000`);
+  const rowIndex = rows.findIndex(r => r[0] === campaign.id);
+  if (rowIndex === -1) throw new Error(`Campaign ${campaign.id} not found`);
+
+  const actualRow = rowIndex + 2;
+  await writeRange(spreadsheetId, `${CAMPAIGNS_TAB}!A${actualRow}:N${actualRow}`, [[
+    campaign.id,
+    campaign.ticker,
+    campaign.type,
+    campaign.status,
+    campaign.phase,
+    campaign.tradeIds,
+    campaign.assignedStrike ?? '',
+    campaign.assignedAt,
+    campaign.leapsCost ?? '',
+    campaign.leapsStrike ?? '',
+    campaign.leapsExpiry,
+    campaign.startedAt,
+    campaign.completedAt,
+    campaign.notes,
+  ]]);
 }
