@@ -94,9 +94,9 @@ export function Dashboard() {
               href="/trades?view=realizedPL"
             />
             <StatCard
-              title="Total Premium"
-              value={formatCurrency(stats.totalPremium)}
-              subtitle="All time collected"
+              title="Premium Collected"
+              value={formatCurrency(stats.premiumCollected)}
+              subtitle={stats.premiumPaid > 0 ? `Paid: ${formatCurrency(stats.premiumPaid)}` : 'All sell trades'}
               href="/trades?view=totalPremium"
             />
             <StatCard

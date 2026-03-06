@@ -231,6 +231,16 @@ export async function initializeSummaryTab(spreadsheetId: string): Promise<void>
   ]);
 }
 
+// Parse a numeric value from a sheet cell, handling commas, $, and parentheses for negatives
+function parseNum(val: string | undefined | null): number {
+  if (!val) return 0;
+  // Remove $, commas, spaces; convert (1,234) → -1234
+  const cleaned = val.toString().trim().replace(/[$,\s]/g, '');
+  const negative = cleaned.startsWith('(') && cleaned.endsWith(')');
+  const num = parseFloat(negative ? cleaned.slice(1, -1) : cleaned);
+  return isNaN(num) ? 0 : negative ? -num : num;
+}
+
 // Get all trades for a ticker
 export async function getTradesForTicker(
   spreadsheetId: string,
@@ -241,7 +251,7 @@ export async function getTradesForTicker(
     return [];
   }
 
-  // Read columns A through P to include all columns with IV
+  // Read columns A through P (row 1 is header, data starts at row 2)
   const rows = await readRange(spreadsheetId, `${ticker}!A2:P1000`);
 
   return rows
@@ -257,18 +267,18 @@ export async function getTradesForTicker(
       id: `${ticker}-${actualRow}`,  // Use actual row number, not filtered index
       ticker: row[0] || ticker,      // Column A: Ticker
       type: row[1] || 'CSP',         // Column B: Type
-      strike: parseFloat(row[2]) || 0,  // Column C: Strike
+      strike: parseNum(row[2]),      // Column C: Strike
       qty: parseInt(row[3]) || 1,    // Column D: Qty
-      delta: parseFloat(row[4]) || 0,   // Column E: Delta
-      iv: row[5] ? parseFloat(row[5].toString().replace('%', '')) : null, // Column F: IV
+      delta: parseNum(row[4]),       // Column E: Delta
+      iv: row[5] ? parseNum(row[5].toString().replace('%', '')) : null, // Column F: IV
       opened: row[6] || '',          // Column G: Opened (date)
       expiry: row[7] || '',          // Column H: Expiry
       dte: row[8] ? parseInt(row[8]) : null,  // Column I: DTE
-      premium: row[9] ? parseFloat(row[9]) : null, // Column J: Premium ($)
-      exit: row[10] ? parseFloat(row[10]) : null,    // Column K: Exit
-      fee: row[11] ? parseFloat(row[11]) : null,   // Column L: Fee
-      pnl: row[12] ? parseFloat(row[12]) : null,   // Column M: P/L
-      roi: row[13] ? parseFloat(row[13].toString().replace('%', '')) : null, // Column N: ROI %
+      premium: row[9] ? parseNum(row[9]) : null, // Column J: Premium ($)
+      exit: row[10] ? parseNum(row[10]) : null,  // Column K: Exit
+      fee: row[11] ? parseNum(row[11]) : null,   // Column L: Fee
+      pnl: row[12] ? parseNum(row[12]) : null,   // Column M: P/L
+      roi: row[13] ? parseNum(row[13].toString().replace('%', '')) : null, // Column N: ROI %
       status: row[14] || 'Open',     // Column O: Status
       notes: row[15] || '',          // Column P: Helper/Notes
     }));
@@ -396,11 +406,12 @@ export async function updateTrade(
   ]);
 }
 
-// Close a trade (update Status and P/L columns)
+// Close a trade (update Status, Exit, and P/L columns)
 export async function closeTrade(
   spreadsheetId: string,
   ticker: string,
   tradeId: string,
+  exitPrice: number,
   pnl: number
 ): Promise<void> {
   const trades = await getTradesForTicker(spreadsheetId, ticker);
@@ -413,8 +424,9 @@ export async function closeTrade(
   await updateTrade(spreadsheetId, ticker, {
     ...trade,
     status: 'CLOSED',
+    exit: exitPrice,
     pnl,
-    dte: 0, // Expired
+    dte: 0,
   });
 }
 
