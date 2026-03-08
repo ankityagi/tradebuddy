@@ -238,14 +238,14 @@ export function TradeForm() {
   if (loadingTrade) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="text-gray-600">Loading trade...</div>
+        <div className="text-gray-400">Loading trade...</div>
       </div>
     );
   }
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h2 className="text-3xl font-bold mb-6">{isEditing ? 'Edit Trade' : 'New Trade'}</h2>
+      <h2 className="text-3xl font-bold text-white mb-6">{isEditing ? 'Edit Trade' : 'New Trade'}</h2>
 
       {/* Campaign banner — shown when editing a campaign-linked trade */}
       {campaign && (
@@ -401,29 +401,29 @@ export function TradeForm() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Ticker and Strategy */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-xl font-semibold mb-4">Basic Information</h3>
+        <div className="bg-gray-800 border border-gray-700 p-6 rounded-xl">
+          <h3 className="text-lg font-semibold text-white mb-4">Basic Information</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-400 mb-1">
                 Ticker Symbol *
               </label>
               <input
                 type="text"
                 value={formData.ticker}
                 onChange={(e) => setFormData({ ...formData, ticker: e.target.value.toUpperCase() })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                 placeholder="e.g., AAPL"
               />
-              {errors.ticker && <p className="text-red-500 text-sm mt-1">{errors.ticker}</p>}
+              {errors.ticker && <p className="text-red-400 text-sm mt-1">{errors.ticker}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Strategy *</label>
+              <label className="block text-sm font-medium text-gray-400 mb-1">Strategy *</label>
               <select
                 value={formData.strategy}
                 onChange={(e) => setFormData({ ...formData, strategy: e.target.value as Strategy })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               >
                 <option value="singleOption">Single Option</option>
                 <option value="vertical">Vertical Spread</option>
@@ -439,7 +439,7 @@ export function TradeForm() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-400 mb-1">
                 Entry Price (Net Debit/Credit) *
               </label>
               <input
@@ -449,14 +449,14 @@ export function TradeForm() {
                 onChange={(e) =>
                   setFormData({ ...formData, entryPrice: parseFloat(e.target.value) || 0 })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                 placeholder="0.00"
               />
               <p className="text-xs text-gray-500 mt-1">Positive for debit, negative for credit</p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-400 mb-1">
                 Quantity (Contracts/Shares) *
               </label>
               <input
@@ -465,7 +465,7 @@ export function TradeForm() {
                 onChange={(e) =>
                   setFormData({ ...formData, quantity: parseInt(e.target.value) || 1 })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                 placeholder="1"
                 min="1"
               />
@@ -474,13 +474,13 @@ export function TradeForm() {
         </div>
 
         {/* Legs */}
-        <div className="bg-white p-6 rounded-lg shadow">
+        <div className="bg-gray-800 border border-gray-700 p-6 rounded-xl">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-semibold">Trade Legs</h3>
+            <h3 className="text-lg font-semibold text-white">Trade Legs</h3>
             <button
               type="button"
               onClick={addLeg}
-              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors"
             >
               + Add Leg
             </button>
@@ -488,14 +488,14 @@ export function TradeForm() {
 
           <div className="space-y-4">
             {formData.legs.map((leg, index) => (
-              <div key={index} className="border border-gray-200 p-4 rounded-md">
+              <div key={index} className="border border-gray-700 bg-gray-900/50 p-4 rounded-lg">
                 <div className="flex justify-between items-center mb-3">
-                  <h4 className="font-medium">Leg {index + 1}</h4>
+                  <h4 className="text-sm font-semibold text-gray-300">Leg {index + 1}</h4>
                   {formData.legs.length > 1 && (
                     <button
                       type="button"
                       onClick={() => removeLeg(index)}
-                      className="text-red-600 hover:text-red-700 text-sm"
+                      className="text-red-400 hover:text-red-300 text-sm"
                     >
                       Remove
                     </button>
@@ -504,11 +504,11 @@ export function TradeForm() {
 
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">Type</label>
                     <select
                       value={leg.type}
                       onChange={(e) => updateLeg(index, 'type', e.target.value as LegType)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     >
                       <option value="call">Call</option>
                       <option value="put">Put</option>
@@ -517,11 +517,11 @@ export function TradeForm() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Side</label>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">Side</label>
                     <select
                       value={leg.side}
                       onChange={(e) => updateLeg(index, 'side', e.target.value as LegSide)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     >
                       <option value="buy">Buy</option>
                       <option value="sell">Sell</option>
@@ -529,12 +529,12 @@ export function TradeForm() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">Quantity</label>
                     <input
                       type="number"
                       value={leg.quantity}
                       onChange={(e) => updateLeg(index, 'quantity', parseInt(e.target.value) || 1)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                       min="1"
                     />
                   </div>
@@ -542,7 +542,7 @@ export function TradeForm() {
                   {leg.type !== 'stock' && (
                     <>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-xs font-medium text-gray-400 mb-1">
                           Strike
                         </label>
                         <input
@@ -552,27 +552,27 @@ export function TradeForm() {
                           onChange={(e) =>
                             updateLeg(index, 'strike', parseFloat(e.target.value) || undefined)
                           }
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                           placeholder="0.00"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-xs font-medium text-gray-400 mb-1">
                           Expiry
                         </label>
                         <input
                           type="date"
                           value={leg.expiry || ''}
                           onChange={(e) => updateLeg(index, 'expiry', e.target.value || undefined)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         />
                       </div>
                     </>
                   )}
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Price</label>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">Price</label>
                     <input
                       type="number"
                       step="0.01"
@@ -580,7 +580,7 @@ export function TradeForm() {
                       onChange={(e) =>
                         updateLeg(index, 'price', parseFloat(e.target.value) || undefined)
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                       placeholder="0.00"
                     />
                   </div>
@@ -591,42 +591,42 @@ export function TradeForm() {
         </div>
 
         {/* Notes */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-xl font-semibold mb-4">Notes</h3>
+        <div className="bg-gray-800 border border-gray-700 p-6 rounded-xl">
+          <h3 className="text-lg font-semibold text-white mb-4">Notes</h3>
           <textarea
             value={formData.notes}
             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
             rows={3}
             placeholder="Optional notes about this trade..."
           />
         </div>
 
         {/* Metrics Display */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-xl font-semibold mb-4">Risk Metrics</h3>
+        <div className="bg-gray-800 border border-gray-700 p-6 rounded-xl">
+          <h3 className="text-lg font-semibold text-white mb-4">Risk Metrics</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <div>
-              <p className="text-sm text-gray-600">Max Risk</p>
-              <p className="text-lg font-semibold">
+              <p className="text-sm text-gray-400">Max Risk</p>
+              <p className="text-lg font-semibold text-white">
                 {metrics.maxRisk !== undefined ? `$${metrics.maxRisk.toFixed(2)}` : 'N/A'}
               </p>
             </div>
             <div>
-              <p className="text-sm text-gray-600">Max Reward</p>
-              <p className="text-lg font-semibold">
+              <p className="text-sm text-gray-400">Max Reward</p>
+              <p className="text-lg font-semibold text-white">
                 {metrics.maxReward !== undefined ? `$${metrics.maxReward.toFixed(2)}` : 'N/A'}
               </p>
             </div>
             <div>
-              <p className="text-sm text-gray-600">Risk/Reward</p>
-              <p className="text-lg font-semibold">
+              <p className="text-sm text-gray-400">Risk/Reward</p>
+              <p className="text-lg font-semibold text-white">
                 {metrics.rr !== undefined ? metrics.rr.toFixed(2) : 'N/A'}
               </p>
             </div>
             <div>
-              <p className="text-sm text-gray-600">POP (Est.)</p>
-              <p className="text-lg font-semibold">
+              <p className="text-sm text-gray-400">POP (Est.)</p>
+              <p className="text-lg font-semibold text-white">
                 {metrics.popEst !== undefined ? `${(metrics.popEst * 100).toFixed(1)}%` : 'N/A'}
               </p>
             </div>
@@ -634,23 +634,21 @@ export function TradeForm() {
 
           {metrics.breakeven && metrics.breakeven.length > 0 && (
             <div className="mb-4">
-              <p className="text-sm text-gray-600">Breakeven</p>
-              <p className="text-lg font-semibold">
+              <p className="text-sm text-gray-400">Breakeven</p>
+              <p className="text-lg font-semibold text-white">
                 {metrics.breakeven.map((be) => `$${be.toFixed(2)}`).join(', ')}
               </p>
             </div>
           )}
 
-          <div
-            className={`p-4 rounded-md bg-${getRiskLevelColor(assessment.riskLevel)}-50 border border-${getRiskLevelColor(assessment.riskLevel)}-200`}
-          >
-            <div className="flex items-start">
+          <div className="p-4 rounded-lg bg-gray-900/60 border border-gray-700">
+            <div className="flex items-start gap-3">
               <span
-                className={`px-2 py-1 rounded text-xs font-semibold bg-${getRiskLevelColor(assessment.riskLevel)}-600 text-white mr-3`}
+                className={`px-2 py-1 rounded text-xs font-semibold bg-${getRiskLevelColor(assessment.riskLevel)}-600 text-white shrink-0`}
               >
                 {assessment.riskLevel.toUpperCase()}
               </span>
-              <p className="text-sm text-gray-800">{assessment.text}</p>
+              <p className="text-sm text-gray-300">{assessment.text}</p>
             </div>
           </div>
         </div>
@@ -660,14 +658,14 @@ export function TradeForm() {
           <button
             type="submit"
             disabled={loading}
-            className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors font-semibold"
+            className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 disabled:bg-gray-600 disabled:text-gray-400 transition-colors font-semibold"
           >
             {loading ? 'Saving...' : isEditing ? 'Update Trade' : 'Create Trade'}
           </button>
           <button
             type="button"
             onClick={() => navigate('/trades')}
-            className="px-6 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+            className="px-6 py-3 bg-gray-700 text-white rounded-xl hover:bg-gray-600 transition-colors font-semibold"
           >
             Cancel
           </button>
