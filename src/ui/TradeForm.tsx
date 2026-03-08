@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { z } from 'zod';
-import type { Leg, Strategy, LegType, LegSide } from '../domain/types';
+import type { Leg, Strategy, LegType, LegSide, Campaign, TradeRole } from '../domain/types';
 import { computeMetrics } from '../domain/risk';
 import { generateAssessment, getRiskLevelColor } from '../domain/assessment';
-import { createTrade, getTrade, updateTrade } from '../data/repo';
+import { createTrade, getTrade, updateTrade, getCampaignById, getActiveCampaigns, linkTradeToCampaign, unlinkTradeFromCampaign } from '../data/repo';
+import { phaseLabel } from '../domain/campaigns';
 
 // Zod validation schema
 const legSchema = z.object({
@@ -36,6 +37,18 @@ const tradeFormSchema = z.object({
 
 type TradeFormData = z.infer<typeof tradeFormSchema>;
 
+function roleLabel(role: TradeRole): string {
+  const labels: Record<TradeRole, string> = {
+    csp: 'Cash-Secured Put',
+    cc: 'Covered Call',
+    roll: 'Roll',
+    assignment: 'Assignment',
+    leaps: 'LEAPS',
+    short_call: 'Short Call',
+  };
+  return labels[role] ?? role;
+}
+
 const initialLeg: Leg = {
   type: 'call',
   side: 'buy',
@@ -60,13 +73,21 @@ export function TradeForm() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [loadingTrade, setLoadingTrade] = useState(false);
+  const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [tradeRole, setTradeRole] = useState<TradeRole | undefined>(undefined);
+  const [availableCampaigns, setAvailableCampaigns] = useState<Campaign[]>([]);
+  const [linkCampaignId, setLinkCampaignId] = useState('');
+  const [linkRole, setLinkRole] = useState<TradeRole>('csp');
+  const [linking, setLinking] = useState(false);
+  const [linkError, setLinkError] = useState('');
+  const [unlinking, setUnlinking] = useState(false);
 
   // Load trade if editing
   useEffect(() => {
     if (isEditing && id) {
       setLoadingTrade(true);
       getTrade(id)
-        .then((trade) => {
+        .then(async (trade) => {
           if (trade) {
             setFormData({
               ticker: trade.ticker,
@@ -76,11 +97,51 @@ export function TradeForm() {
               quantity: trade.quantity,
               notes: trade.notes || '',
             });
+            setTradeRole(trade.tradeRole);
+            if (trade.campaignId) {
+              const c = await getCampaignById(trade.campaignId).catch(() => null);
+              setCampaign(c ?? null);
+            }
           }
         })
         .finally(() => setLoadingTrade(false));
     }
   }, [id, isEditing]);
+
+  // Load active campaigns for the link UI (edit mode only)
+  useEffect(() => {
+    if (isEditing) {
+      getActiveCampaigns().then(setAvailableCampaigns).catch(() => {});
+    }
+  }, [isEditing]);
+
+  const handleUnlinkFromCampaign = async () => {
+    if (!id || !campaign) return;
+    setUnlinking(true);
+    try {
+      await unlinkTradeFromCampaign(id, campaign.id);
+      setCampaign(null);
+      setTradeRole(undefined);
+    } finally {
+      setUnlinking(false);
+    }
+  };
+
+  const handleLinkToCampaign = async () => {
+    if (!id || !linkCampaignId) return;
+    setLinking(true);
+    setLinkError('');
+    try {
+      await linkTradeToCampaign(id, linkCampaignId, linkRole);
+      const c = await getCampaignById(linkCampaignId);
+      setCampaign(c ?? null);
+      setTradeRole(linkRole);
+    } catch (err) {
+      setLinkError(err instanceof Error ? err.message : 'Failed to link campaign');
+    } finally {
+      setLinking(false);
+    }
+  };
 
   // Calculate metrics in real-time
   const metrics = computeMetrics(formData.legs, formData.entryPrice, formData.quantity);
@@ -156,6 +217,93 @@ export function TradeForm() {
   return (
     <div className="max-w-4xl mx-auto">
       <h2 className="text-3xl font-bold mb-6">{isEditing ? 'Edit Trade' : 'New Trade'}</h2>
+
+      {/* Campaign banner — shown when editing a campaign-linked trade */}
+      {campaign && (
+        <div className="bg-emerald-900/30 border border-emerald-700 rounded-xl p-4 mb-6 flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-xs font-bold uppercase tracking-wide bg-emerald-500 text-white px-2 py-0.5 rounded">
+              {campaign.type === 'wheel' ? 'Wheel' : 'PMCC'}
+            </span>
+            <span className="text-sm font-semibold text-white">{campaign.ticker} Campaign</span>
+            <span className="text-xs text-gray-400">·</span>
+            <span className="text-sm text-gray-300">Phase: <span className="text-emerald-400 font-medium">{phaseLabel(campaign.phase)}</span></span>
+            {tradeRole && (
+              <>
+                <span className="text-xs text-gray-400">·</span>
+                <span className="text-sm text-gray-300">Role: <span className="text-emerald-400 font-medium">{roleLabel(tradeRole)}</span></span>
+              </>
+            )}
+            <span className={`text-xs px-2 py-0.5 rounded-full ${campaign.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-700 text-gray-400'}`}>
+              {campaign.status === 'active' ? 'Active' : 'Completed'}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleUnlinkFromCampaign}
+              disabled={unlinking}
+              className="text-xs text-gray-400 hover:text-red-400 whitespace-nowrap transition-colors disabled:opacity-50"
+            >
+              {unlinking ? 'Unlinking…' : 'Unlink'}
+            </button>
+            <Link
+              to="/strategies"
+              className="text-xs text-emerald-400 hover:text-emerald-300 whitespace-nowrap font-medium"
+            >
+              View campaign →
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Campaign linker — shown when editing an unlinked trade and campaigns exist */}
+      {isEditing && !campaign && availableCampaigns.length > 0 && (
+        <div className="bg-gray-800 border border-gray-600 rounded-xl p-4 mb-6">
+          <p className="text-sm font-semibold text-gray-300 mb-3">Link to Campaign</p>
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="flex-1 min-w-40">
+              <label className="block text-xs text-gray-400 mb-1">Campaign</label>
+              <select
+                value={linkCampaignId}
+                onChange={(e) => setLinkCampaignId(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="">Select campaign…</option>
+                {availableCampaigns.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.ticker} — {c.type === 'wheel' ? 'Wheel' : 'PMCC'} ({phaseLabel(c.phase)})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex-1 min-w-36">
+              <label className="block text-xs text-gray-400 mb-1">Trade Role</label>
+              <select
+                value={linkRole}
+                onChange={(e) => setLinkRole(e.target.value as TradeRole)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="csp">Cash-Secured Put</option>
+                <option value="cc">Covered Call</option>
+                <option value="roll">Roll</option>
+                <option value="assignment">Assignment</option>
+                <option value="leaps">LEAPS</option>
+                <option value="short_call">Short Call</option>
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={handleLinkToCampaign}
+              disabled={!linkCampaignId || linking}
+              className="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 disabled:bg-gray-600 disabled:text-gray-400 transition-colors"
+            >
+              {linking ? 'Linking…' : 'Link'}
+            </button>
+          </div>
+          {linkError && <p className="text-red-400 text-xs mt-2">{linkError}</p>}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Ticker and Strategy */}

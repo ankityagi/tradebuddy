@@ -457,3 +457,17 @@ export async function linkTradeToCampaign(
     tradeRole: tradeRole as Trade['tradeRole'],
   });
 }
+
+/**
+ * Unlink a trade from its campaign: removes tradeId from campaign.tradeIds
+ * and clears the trade's campaignId and tradeRole columns.
+ */
+export async function unlinkTradeFromCampaign(tradeId: string, campaignId: string): Promise<void> {
+  const campaign = await getCampaignById(campaignId);
+  if (campaign) {
+    campaign.tradeIds = campaign.tradeIds.filter((id) => id !== tradeId);
+    await updateCampaign(campaign);
+  }
+
+  await updateTrade(tradeId, { campaignId: undefined, tradeRole: undefined });
+}

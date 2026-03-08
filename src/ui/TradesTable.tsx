@@ -475,6 +475,9 @@ export function TradesTable() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   Strategy
                 </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  Campaign
+                </th>
                 <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${
                   currentView === 'totalPremium' || currentView === 'outstandingPremium'
                     ? 'text-emerald-400 bg-emerald-500/10'
@@ -526,6 +529,21 @@ export function TradesTable() {
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-300">{trade.strategy}</div>
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    {trade.campaignId ? (
+                      <Link to="/strategies" className="flex items-center gap-1.5 group">
+                        <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500/30">
+                          {trade.tradeRole === 'csp' || trade.tradeRole === 'cc' ? 'Wheel' :
+                           trade.tradeRole === 'leaps' || trade.tradeRole === 'short_call' ? 'PMCC' : 'Campaign'}
+                        </span>
+                        <span className="text-xs text-gray-500 group-hover:text-gray-300">
+                          {trade.tradeRole ?? ''}
+                        </span>
+                      </Link>
+                    ) : (
+                      <span className="text-xs text-gray-600">—</span>
+                    )}
                   </td>
                   <td className={`px-4 py-4 whitespace-nowrap ${
                     currentView === 'totalPremium' || currentView === 'outstandingPremium'
