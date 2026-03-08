@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { z } from 'zod';
-import type { Leg, Strategy, LegType, LegSide, Campaign, TradeRole } from '../domain/types';
+import type { Leg, Strategy, LegType, LegSide, Campaign, TradeRole, CampaignType } from '../domain/types';
 import { computeMetrics } from '../domain/risk';
 import { generateAssessment, getRiskLevelColor } from '../domain/assessment';
-import { createTrade, getTrade, updateTrade, getCampaignById, getActiveCampaigns, linkTradeToCampaign, unlinkTradeFromCampaign } from '../data/repo';
+import { createTrade, getTrade, updateTrade, getCampaignById, getActiveCampaigns, linkTradeToCampaign, unlinkTradeFromCampaign, createCampaign } from '../data/repo';
 import { phaseLabel } from '../domain/campaigns';
 
 // Zod validation schema
@@ -81,6 +81,10 @@ export function TradeForm() {
   const [linking, setLinking] = useState(false);
   const [linkError, setLinkError] = useState('');
   const [unlinking, setUnlinking] = useState(false);
+  const [showCreateCampaign, setShowCreateCampaign] = useState(false);
+  const [newCampaignType, setNewCampaignType] = useState<CampaignType>('wheel');
+  const [newCampaignRole, setNewCampaignRole] = useState<TradeRole>('csp');
+  const [creating, setCreating] = useState(false);
 
   // Load trade if editing
   useEffect(() => {
@@ -140,6 +144,31 @@ export function TradeForm() {
       setLinkError(err instanceof Error ? err.message : 'Failed to link campaign');
     } finally {
       setLinking(false);
+    }
+  };
+
+  const handleCreateAndLinkCampaign = async () => {
+    if (!id) return;
+    setCreating(true);
+    setLinkError('');
+    try {
+      const initialPhase = newCampaignType === 'wheel' ? 'selling_puts' : 'leaps_open';
+      const newCampaign = await createCampaign({
+        ticker: formData.ticker,
+        type: newCampaignType,
+        status: 'active',
+        phase: initialPhase,
+        tradeIds: [],
+        startedAt: new Date().toISOString(),
+      });
+      await linkTradeToCampaign(id, newCampaign.id, newCampaignRole);
+      setCampaign({ ...newCampaign, tradeIds: [id] });
+      setTradeRole(newCampaignRole);
+      setShowCreateCampaign(false);
+    } catch (err) {
+      setLinkError(err instanceof Error ? err.message : 'Failed to create campaign');
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -257,50 +286,115 @@ export function TradeForm() {
         </div>
       )}
 
-      {/* Campaign linker — shown when editing an unlinked trade and campaigns exist */}
-      {isEditing && !campaign && availableCampaigns.length > 0 && (
+      {/* Campaign linker — shown when editing an unlinked trade */}
+      {isEditing && !campaign && (
         <div className="bg-gray-800 border border-gray-600 rounded-xl p-4 mb-6">
-          <p className="text-sm font-semibold text-gray-300 mb-3">Link to Campaign</p>
-          <div className="flex flex-wrap gap-3 items-end">
-            <div className="flex-1 min-w-40">
-              <label className="block text-xs text-gray-400 mb-1">Campaign</label>
-              <select
-                value={linkCampaignId}
-                onChange={(e) => setLinkCampaignId(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-semibold text-gray-300">Campaign</p>
+            {availableCampaigns.length > 0 && (
+              <button
+                type="button"
+                onClick={() => { setShowCreateCampaign(v => !v); setLinkError(''); }}
+                className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
               >
-                <option value="">Select campaign…</option>
-                {availableCampaigns.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.ticker} — {c.type === 'wheel' ? 'Wheel' : 'PMCC'} ({phaseLabel(c.phase)})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex-1 min-w-36">
-              <label className="block text-xs text-gray-400 mb-1">Trade Role</label>
-              <select
-                value={linkRole}
-                onChange={(e) => setLinkRole(e.target.value as TradeRole)}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="csp">Cash-Secured Put</option>
-                <option value="cc">Covered Call</option>
-                <option value="roll">Roll</option>
-                <option value="assignment">Assignment</option>
-                <option value="leaps">LEAPS</option>
-                <option value="short_call">Short Call</option>
-              </select>
-            </div>
-            <button
-              type="button"
-              onClick={handleLinkToCampaign}
-              disabled={!linkCampaignId || linking}
-              className="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 disabled:bg-gray-600 disabled:text-gray-400 transition-colors"
-            >
-              {linking ? 'Linking…' : 'Link'}
-            </button>
+                {showCreateCampaign ? '← Link existing' : '+ Create new'}
+              </button>
+            )}
           </div>
+
+          {/* Create new campaign */}
+          {(showCreateCampaign || availableCampaigns.length === 0) ? (
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="flex-1 min-w-36">
+                <label className="block text-xs text-gray-400 mb-1">Strategy</label>
+                <select
+                  value={newCampaignType}
+                  onChange={(e) => {
+                    const t = e.target.value as CampaignType;
+                    setNewCampaignType(t);
+                    setNewCampaignRole(t === 'wheel' ? 'csp' : 'leaps');
+                  }}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="wheel">Wheel</option>
+                  <option value="pmcc">PMCC</option>
+                </select>
+              </div>
+              <div className="flex-1 min-w-36">
+                <label className="block text-xs text-gray-400 mb-1">Trade Role</label>
+                <select
+                  value={newCampaignRole}
+                  onChange={(e) => setNewCampaignRole(e.target.value as TradeRole)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  {newCampaignType === 'wheel' ? (
+                    <>
+                      <option value="csp">Cash-Secured Put</option>
+                      <option value="cc">Covered Call</option>
+                      <option value="assignment">Assignment</option>
+                      <option value="roll">Roll</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="leaps">LEAPS</option>
+                      <option value="short_call">Short Call</option>
+                      <option value="roll">Roll</option>
+                    </>
+                  )}
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={handleCreateAndLinkCampaign}
+                disabled={!formData.ticker || creating}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 disabled:bg-gray-600 disabled:text-gray-400 transition-colors"
+              >
+                {creating ? 'Creating…' : 'Create & Link'}
+              </button>
+            </div>
+          ) : (
+            /* Link to existing campaign */
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="flex-1 min-w-40">
+                <label className="block text-xs text-gray-400 mb-1">Campaign</label>
+                <select
+                  value={linkCampaignId}
+                  onChange={(e) => setLinkCampaignId(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">Select campaign…</option>
+                  {availableCampaigns.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.ticker} — {c.type === 'wheel' ? 'Wheel' : 'PMCC'} ({phaseLabel(c.phase)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex-1 min-w-36">
+                <label className="block text-xs text-gray-400 mb-1">Trade Role</label>
+                <select
+                  value={linkRole}
+                  onChange={(e) => setLinkRole(e.target.value as TradeRole)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="csp">Cash-Secured Put</option>
+                  <option value="cc">Covered Call</option>
+                  <option value="roll">Roll</option>
+                  <option value="assignment">Assignment</option>
+                  <option value="leaps">LEAPS</option>
+                  <option value="short_call">Short Call</option>
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={handleLinkToCampaign}
+                disabled={!linkCampaignId || linking}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 disabled:bg-gray-600 disabled:text-gray-400 transition-colors"
+              >
+                {linking ? 'Linking…' : 'Link'}
+              </button>
+            </div>
+          )}
           {linkError && <p className="text-red-400 text-xs mt-2">{linkError}</p>}
         </div>
       )}
