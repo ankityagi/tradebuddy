@@ -86,10 +86,24 @@ async function sheetsRequest(
   return response;
 }
 
-// Get spreadsheet metadata (tabs, etc.)
+// In-memory cache for spreadsheet metadata (tab list rarely changes)
+const spreadsheetInfoCache = new Map<string, { data: any; expiresAt: number }>();
+const SPREADSHEET_INFO_TTL_MS = 60_000; // 60 seconds
+
+export function invalidateSpreadsheetInfoCache(spreadsheetId: string) {
+  spreadsheetInfoCache.delete(spreadsheetId);
+}
+
+// Get spreadsheet metadata (tabs, etc.) — cached for 60s to reduce quota usage
 export async function getSpreadsheetInfo(spreadsheetId: string) {
+  const cached = spreadsheetInfoCache.get(spreadsheetId);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.data;
+  }
   const response = await sheetsRequest(`/${spreadsheetId}`);
-  return response.json();
+  const data = await response.json();
+  spreadsheetInfoCache.set(spreadsheetId, { data, expiresAt: Date.now() + SPREADSHEET_INFO_TTL_MS });
+  return data;
 }
 
 // Check if user has access to the spreadsheet
@@ -137,6 +151,8 @@ export async function createTab(spreadsheetId: string, tabName: string): Promise
       ],
     }),
   });
+  // Invalidate cache so the new tab is visible immediately
+  invalidateSpreadsheetInfoCache(spreadsheetId);
 }
 
 // Duplicate a sheet tab with a new name

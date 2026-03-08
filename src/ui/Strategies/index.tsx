@@ -9,10 +9,12 @@ export function StrategiesPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       setLoading(true);
+      setError(null);
       try {
         const [allCampaigns, allTrades] = await Promise.all([getCampaigns(), getAllTrades()]);
         // Sort: active first, then by startedAt descending
@@ -22,6 +24,8 @@ export function StrategiesPage() {
         });
         setCampaigns(allCampaigns);
         setTrades(allTrades);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load campaigns');
       } finally {
         setLoading(false);
       }
@@ -36,6 +40,15 @@ export function StrategiesPage() {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="text-gray-400">Loading campaigns...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-900/20 border border-red-700 rounded-xl p-6 text-center">
+        <p className="text-red-400 font-semibold mb-1">Failed to load campaigns</p>
+        <p className="text-red-300/70 text-sm">{error}</p>
       </div>
     );
   }
