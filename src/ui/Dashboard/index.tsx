@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import type { Trade } from '../../domain/types';
-import { getAllTrades } from '../../data/repo';
+import type { Trade, Campaign } from '../../domain/types';
+import { getAllTrades, getCampaigns } from '../../data/repo';
 import { StatCard, TrendDirection } from './StatCard';
 import { PerformanceChart } from './PerformanceChart';
 import { AllocationChart } from './AllocationChart';
@@ -11,25 +11,28 @@ import {
   calculateMonthlyPerformance,
   calculateAllocationByTicker,
   calculateAllocationByStrategy,
+  calculateCampaignStats,
   formatCurrency,
   formatPercent,
 } from './utils';
 
 export function Dashboard() {
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function loadTrades() {
+    async function loadData() {
       setLoading(true);
       try {
-        const allTrades = await getAllTrades();
+        const [allTrades, allCampaigns] = await Promise.all([getAllTrades(), getCampaigns()]);
         setTrades(allTrades);
+        setCampaigns(allCampaigns);
       } finally {
         setLoading(false);
       }
     }
-    loadTrades();
+    loadData();
   }, []);
 
   if (loading) {
@@ -41,6 +44,7 @@ export function Dashboard() {
   }
 
   const stats = calculateStats(trades);
+  const campaignStats = calculateCampaignStats(campaigns, trades);
   const monthlyData = calculateMonthlyPerformance(trades);
   const allocationByTicker = calculateAllocationByTicker(trades);
   const allocationByStrategy = calculateAllocationByStrategy(trades);
@@ -118,6 +122,32 @@ export function Dashboard() {
               href="/trades?view=winRate"
             />
           </div>
+
+          {/* Campaign Stat Cards — only shown when campaigns exist */}
+          {campaigns.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <StatCard
+                title="Active Campaigns"
+                value={String(campaignStats.activeCampaigns)}
+                subtitle={`${campaignStats.completedCampaigns} completed`}
+                href="/strategies"
+              />
+              <StatCard
+                title="Campaign Win Rate"
+                value={campaignStats.completedCampaigns > 0 ? formatPercent(campaignStats.campaignWinRate) : 'N/A'}
+                trend={campaignStats.campaignWinRate >= 50 ? 'up' : campaignStats.completedCampaigns > 0 ? 'down' : 'neutral'}
+                subtitle="By completed campaign"
+                href="/strategies"
+              />
+              <StatCard
+                title="Campaign P&L"
+                value={formatCurrency(campaignStats.totalCampaignPL)}
+                trend={campaignStats.totalCampaignPL > 0 ? 'up' : campaignStats.totalCampaignPL < 0 ? 'down' : 'neutral'}
+                subtitle={`${campaignStats.totalCampaigns} total campaigns`}
+                href="/strategies"
+              />
+            </div>
+          )}
 
           {/* Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">

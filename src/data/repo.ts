@@ -5,7 +5,7 @@
  * using Google Sheets as the backend storage.
  */
 
-import type { Trade, CreateTradeInput, UpdateTradeInput } from '../domain/types';
+import type { Trade, CreateTradeInput, UpdateTradeInput, Campaign, CreateCampaignInput } from '../domain/types';
 import { getSheetUrl, extractSpreadsheetId } from '../services/auth';
 import * as sheets from '../services/sheets';
 
@@ -84,6 +84,8 @@ function sheetTradeToTrade(sheetTrade: sheets.SheetTrade, ticker: string): Trade
     realizedPL: sheetTrade.pnl ?? undefined,
     fee: sheetTrade.fee ?? undefined,
     notes: sheetTrade.notes,
+    campaignId: sheetTrade.campaignId || undefined,
+    tradeRole: (sheetTrade.tradeRole as Trade['tradeRole']) || undefined,
   };
 }
 
@@ -164,6 +166,8 @@ function tradeToSheetTrade(trade: Trade | CreateTradeInput, ticker: string): Omi
     roi: null, // Would need to be calculated
     status: trade.status === 'open' ? 'OPEN' : 'CLOSED',
     notes: trade.notes ?? '',
+    campaignId: trade.campaignId ?? '',
+    tradeRole: trade.tradeRole ?? '',
   };
 }
 
@@ -334,4 +338,136 @@ export async function getTradesByTicker(ticker: string): Promise<Trade[]> {
  */
 export async function clearAllTrades(): Promise<void> {
   console.warn('clearAllTrades is not implemented for Google Sheets backend');
+}
+
+// ---------------------------------------------------------------------------
+// Campaign repository functions
+// ---------------------------------------------------------------------------
+
+function sheetCampaignToCampaign(sc: sheets.SheetCampaign): Campaign {
+  return {
+    id: sc.id,
+    ticker: sc.ticker,
+    type: sc.type as Campaign['type'],
+    status: sc.status as Campaign['status'],
+    phase: sc.phase as Campaign['phase'],
+    tradeIds: sc.tradeIds ? sc.tradeIds.split(',').map(s => s.trim()).filter(Boolean) : [],
+    assignedStrike: sc.assignedStrike ?? undefined,
+    assignedAt: sc.assignedAt || undefined,
+    leapsCost: sc.leapsCost ?? undefined,
+    leapsStrike: sc.leapsStrike ?? undefined,
+    leapsExpiry: sc.leapsExpiry || undefined,
+    startedAt: sc.startedAt,
+    completedAt: sc.completedAt || undefined,
+    notes: sc.notes || undefined,
+  };
+}
+
+function campaignToSheetCampaign(c: Campaign): sheets.SheetCampaign {
+  return {
+    id: c.id,
+    ticker: c.ticker,
+    type: c.type,
+    status: c.status,
+    phase: c.phase,
+    tradeIds: c.tradeIds.join(','),
+    assignedStrike: c.assignedStrike ?? null,
+    assignedAt: c.assignedAt ?? '',
+    leapsCost: c.leapsCost ?? null,
+    leapsStrike: c.leapsStrike ?? null,
+    leapsExpiry: c.leapsExpiry ?? '',
+    startedAt: c.startedAt,
+    completedAt: c.completedAt ?? '',
+    notes: c.notes ?? '',
+  };
+}
+
+/**
+ * Get all campaigns
+ */
+export async function getCampaigns(): Promise<Campaign[]> {
+  const spreadsheetId = getSpreadsheetId();
+  const sheetCampaigns = await sheets.readCampaigns(spreadsheetId);
+  return sheetCampaigns.map(sheetCampaignToCampaign);
+}
+
+/**
+ * Get all active campaigns, optionally filtered by ticker
+ */
+export async function getActiveCampaigns(ticker?: string): Promise<Campaign[]> {
+  const all = await getCampaigns();
+  return all.filter(c =>
+    c.status === 'active' && (!ticker || c.ticker.toUpperCase() === ticker.toUpperCase())
+  );
+}
+
+/**
+ * Get a single campaign by ID
+ */
+export async function getCampaignById(id: string): Promise<Campaign | undefined> {
+  const all = await getCampaigns();
+  return all.find(c => c.id === id);
+}
+
+/**
+ * Create a new campaign
+ */
+export async function createCampaign(input: CreateCampaignInput): Promise<Campaign> {
+  const spreadsheetId = getSpreadsheetId();
+  const campaign: Campaign = {
+    ...input,
+    id: generateId(),
+  };
+  await sheets.writeCampaign(spreadsheetId, campaignToSheetCampaign(campaign));
+  return campaign;
+}
+
+/**
+ * Update an existing campaign (full replace)
+ */
+export async function updateCampaign(campaign: Campaign): Promise<void> {
+  const spreadsheetId = getSpreadsheetId();
+  await sheets.updateCampaign(spreadsheetId, campaignToSheetCampaign(campaign));
+}
+
+/**
+ * Link a trade to a campaign: adds tradeId to campaign.tradeIds and updates
+ * the trade row's Q (CampaignID) and R (TradeRole) columns.
+ */
+export async function linkTradeToCampaign(
+  tradeId: string,
+  campaignId: string,
+  tradeRole: Trade['tradeRole']
+): Promise<void> {
+  const campaign = await getCampaignById(campaignId);
+  if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
+
+  // Add tradeId if not already present
+  if (!campaign.tradeIds.includes(tradeId)) {
+    campaign.tradeIds = [...campaign.tradeIds, tradeId];
+    await updateCampaign(campaign);
+  }
+
+  // Update the trade row with campaignId + tradeRole
+  const trade = await getTrade(tradeId);
+  if (!trade) throw new Error(`Trade ${tradeId} not found`);
+
+  await updateTrade(tradeId, {
+    campaignId,
+    tradeRole: tradeRole as Trade['tradeRole'],
+  });
+}
+
+/**
+ * Unlink a trade from its campaign: removes tradeId from campaign.tradeIds
+ * and clears the trade's campaignId and tradeRole columns.
+ */
+export async function unlinkTradeFromCampaign(tradeId: string, campaignId: string): Promise<void> {
+  const campaign = await getCampaignById(campaignId);
+  if (campaign) {
+    campaign.tradeIds = campaign.tradeIds.filter((id) => id !== tradeId);
+    await updateCampaign(campaign);
+  }
+
+  await updateTrade(tradeId, { campaignId: undefined, tradeRole: undefined });
 }

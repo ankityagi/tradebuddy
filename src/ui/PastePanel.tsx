@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { parseTradeText, ParsedTrade } from '../domain/parser';
-import { createTrade } from '../data/repo';
-import type { CreateTradeInput, Strategy, LegSide } from '../domain/types';
+import { createTrade, getActiveCampaigns, createCampaign, updateCampaign, getCampaignById, getAllTrades } from '../data/repo';
+import type { CreateTradeInput, Strategy, LegSide, Campaign, Trade } from '../domain/types';
+import { inferTradeRole } from '../domain/campaigns';
+import { CampaignLinkBanner } from './CampaignLinkBanner';
+import type { CampaignDecision } from './CampaignLinkBanner';
 
 // Convert ParsedTrade to CreateTradeInput
 function parsedToTradeInput(parsed: ParsedTrade): CreateTradeInput | null {
@@ -54,6 +57,43 @@ export function PastePanel() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Campaign state
+  const [activeCampaigns, setActiveCampaigns] = useState<Campaign[]>([]);
+  const [campaignTrades, setCampaignTrades] = useState<Trade[]>([]);
+  // Per-parsed-trade campaign decisions (keyed by index)
+  const [decisions, setDecisions] = useState<Record<number, CampaignDecision>>({});
+
+  useEffect(() => {
+    getActiveCampaigns().then(setActiveCampaigns).catch(() => {});
+    getAllTrades().then(setCampaignTrades).catch(() => {});
+  }, []);
+
+  function getInferredRole(trade: ParsedTrade): Trade['tradeRole'] {
+    const optionType = trade.type === 'call' ? 'call' : 'put';
+    // Infer side from action, symbol prefix ('-' = short/sell), or amountSign ('+' = credit received = sell)
+    let side: 'buy' | 'sell' = 'buy';
+    if (trade.action === 'sell') {
+      side = 'sell';
+    } else if (trade.symbol?.startsWith('-')) {
+      side = 'sell';
+    } else if (trade.amountSign === '+') {
+      side = 'sell';
+    }
+    let dte: number | undefined;
+    if (trade.expiry) {
+      const days = Math.ceil((new Date(trade.expiry).getTime() - Date.now()) / 86400000);
+      dte = days > 0 ? days : 0;
+    }
+    return inferTradeRole(optionType, side, dte);
+  }
+
+  function getActiveCampaignForTrade(trade: ParsedTrade): Campaign | null {
+    if (!trade.ticker) return null;
+    return activeCampaigns.find(c =>
+      c.ticker.toUpperCase() === trade.ticker!.toUpperCase()
+    ) ?? null;
+  }
+
   const onParse = () => {
     if (!text.trim()) {
       setHasError(true);
@@ -63,6 +103,7 @@ export function PastePanel() {
     setHasError(false);
     const res = parseTradeText(text);
     setParsed(res);
+    setDecisions({});
   };
 
   const onClear = () => {
@@ -70,9 +111,10 @@ export function PastePanel() {
     setParsed([]);
     setHasError(false);
     setSaveError(null);
+    setDecisions({});
   };
 
-  const onSaveTrade = async (parsedTrade: ParsedTrade) => {
+  const onSaveTrade = async (parsedTrade: ParsedTrade, index: number) => {
     const tradeInput = parsedToTradeInput(parsedTrade);
     if (!tradeInput) {
       setSaveError('Cannot save trade: missing required fields (ticker, type, or strike)');
@@ -83,8 +125,54 @@ export function PastePanel() {
     setSaveError(null);
 
     try {
-      await createTrade(tradeInput);
-      // Navigate to My Trades on success
+      const decision = decisions[index];
+      let campaignId: string | undefined;
+      let tradeRole: Trade['tradeRole'];
+
+      if (decision?.action === 'new') {
+        // Create a new campaign then link the trade
+        const newCampaign = await createCampaign({
+          ticker: parsedTrade.ticker!,
+          type: decision.type,
+          status: 'active',
+          phase: decision.type === 'wheel' ? 'selling_puts' : 'leaps_open',
+          tradeIds: [],
+          leapsCost: decision.type === 'pmcc' ? (parsedTrade.price ?? undefined) : undefined,
+          leapsStrike: decision.type === 'pmcc' ? (parsedTrade.strike ?? undefined) : undefined,
+          leapsExpiry: decision.type === 'pmcc' ? (parsedTrade.expiry ?? undefined) : undefined,
+          startedAt: new Date().toISOString(),
+        });
+        campaignId = newCampaign.id;
+        tradeRole = decision.role;
+
+        // Refresh active campaigns list
+        const updated = await getActiveCampaigns();
+        setActiveCampaigns(updated);
+      } else if (decision?.action === 'link') {
+        campaignId = decision.campaignId;
+        tradeRole = decision.role;
+      }
+
+      tradeInput.campaignId = campaignId;
+      tradeInput.tradeRole = tradeRole;
+
+      const savedTrade = await createTrade(tradeInput);
+
+      // Add trade to campaign and advance phase if needed
+      if (campaignId) {
+        const campaign = await getCampaignById(campaignId);
+        if (campaign) {
+          if (!campaign.tradeIds.includes(savedTrade.id)) {
+            campaign.tradeIds = [...campaign.tradeIds, savedTrade.id];
+          }
+          // Advance wheel phase when a CC is linked to an assigned campaign
+          if (campaign.type === 'wheel' && tradeRole === 'cc' && campaign.phase === 'assigned') {
+            campaign.phase = 'selling_calls';
+          }
+          await updateCampaign(campaign);
+        }
+      }
+
       navigate('/trades');
     } catch (error) {
       console.error('Failed to save trade:', error);
@@ -171,14 +259,18 @@ $0.65"
             </div>
           )}
 
-          {parsed.map((trade, index) => (
+          {parsed.map((trade, index) => {
+            const inferredRole = getInferredRole(trade);
+            const activeCampaign = getActiveCampaignForTrade(trade);
+            const decision = decisions[index];
+            return (
             <div key={index} className="bg-gray-50 rounded-lg p-4 mb-4 last:mb-0">
               <div className="flex justify-between items-start mb-3">
                 <h4 className="font-semibold text-gray-700">
                   {trade.ticker || 'Unknown'} - {trade.type?.toUpperCase() || 'Option'}
                 </h4>
                 <button
-                  onClick={() => onSaveTrade(trade)}
+                  onClick={() => onSaveTrade(trade, index)}
                   disabled={saving || !trade.ticker || !trade.type || trade.strike === null}
                   className="bg-green-600 text-white px-4 py-1.5 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -271,8 +363,33 @@ $0.65"
                   </div>
                 )}
               </div>
+
+              {/* Campaign banner — show if undecided */}
+              {decision == null ? (
+                <CampaignLinkBanner
+                  ticker={trade.ticker || ''}
+                  inferredRole={inferredRole}
+                  activeCampaign={activeCampaign}
+                  campaignTrades={campaignTrades}
+                  onDecide={(d) => setDecisions(prev => ({ ...prev, [index]: d }))}
+                />
+              ) : decision.action !== 'skip' && (
+                <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                  {decision.action === 'new'
+                    ? `Will start a new ${decision.type === 'wheel' ? 'Wheel' : 'PMCC'} campaign`
+                    : `Will link to existing campaign`}
+                  <button
+                    onClick={() => setDecisions(prev => { const n = { ...prev }; delete n[index]; return n; })}
+                    className="text-gray-400 hover:text-gray-200 underline ml-1"
+                  >
+                    change
+                  </button>
+                </div>
+              )}
             </div>
-          ))}
+            );
+          })}
 
           {/* Raw JSON (collapsible) */}
           <details className="mt-4">
