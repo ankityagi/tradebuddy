@@ -354,6 +354,16 @@ export async function addTrade(
   ticker: string,
   trade: Omit<SheetTrade, 'id'>
 ): Promise<string> {
+  // Guardrail: ensure the trade's ticker matches the tab it's being written to
+  const normalizedTab = ticker.toUpperCase().trim();
+  const normalizedTrade = (trade.ticker || '').toUpperCase().trim();
+  if (normalizedTrade && normalizedTrade !== normalizedTab) {
+    throw new Error(
+      `Ticker mismatch: trade ticker "${trade.ticker}" does not match tab "${ticker}". ` +
+      `Refusing to write to wrong tab.`
+    );
+  }
+
   // Ensure ticker tab exists (duplicates from Template if available)
   await initializeTickerTab(spreadsheetId, ticker);
 
@@ -426,6 +436,15 @@ export async function updateTrade(
   ticker: string,
   trade: SheetTrade
 ): Promise<void> {
+  // Guardrail: ID prefix must match the tab being written to
+  const idPrefix = trade.id.split('-')[0].toUpperCase();
+  if (idPrefix !== ticker.toUpperCase().trim()) {
+    throw new Error(
+      `Ticker mismatch: trade ID "${trade.id}" does not belong to tab "${ticker}". ` +
+      `Refusing to write to wrong tab.`
+    );
+  }
+
   // ID format is "TICKER-rowNum", extract row number
   const rowMatch = trade.id.match(/-(\d+)$/);
   if (!rowMatch) {
