@@ -12,9 +12,10 @@ import {
 interface PMCCCampaignCardProps {
   campaign: Campaign;
   trades: Trade[];
+  onComplete: (campaign: Campaign) => void;
 }
 
-export function PMCCCampaignCard({ campaign, trades }: PMCCCampaignCardProps) {
+export function PMCCCampaignCard({ campaign, trades, onComplete }: PMCCCampaignCardProps) {
   const campaignTrades = trades.filter(t => t.campaignId === campaign.id);
   const premium = campaignPremiumCollected(campaign, campaignTrades);
   const acb = pmccACB(campaign, campaignTrades);
@@ -140,12 +141,22 @@ export function PMCCCampaignCard({ campaign, trades }: PMCCCampaignCardProps) {
       {/* Trades link */}
       <div className="flex items-center justify-between pt-3 border-t border-gray-700">
         <span className="text-xs text-gray-500">{campaign.tradeIds.length} trades in campaign</span>
-        <Link
-          to={`/trades?ticker=${campaign.ticker}`}
-          className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
-        >
-          View trades →
-        </Link>
+        <div className="flex items-center gap-3">
+          {!isCompleted && (
+            <button
+              onClick={() => onComplete(campaign)}
+              className="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition-colors"
+            >
+              Mark Complete
+            </button>
+          )}
+          <Link
+            to={`/trades?ticker=${campaign.ticker}`}
+            className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+          >
+            View trades →
+          </Link>
+        </div>
       </div>
     </div>
   );

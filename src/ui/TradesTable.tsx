@@ -256,6 +256,14 @@ export function TradesTable() {
   // Get view config
   const viewConfig = viewConfigs[currentView];
 
+  // Most recent trade date across ALL trades (for the transfer indicator)
+  const lastTradeDate = trades.length > 0
+    ? trades.reduce((latest, t) =>
+        new Date(t.createdAt) > new Date(latest) ? t.createdAt : latest,
+        trades[0].createdAt
+      )
+    : null;
+
   // Filter trades - apply view filter first, then user filters
   let filteredTrades = trades;
 
@@ -448,6 +456,16 @@ export function TradesTable() {
             </div>
           </div>
         </div>
+
+        {lastTradeDate && (
+          <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+            <span className="text-blue-400 text-xs font-medium uppercase tracking-wide">Last trade entered:</span>
+            <span className="text-blue-300 font-semibold text-sm">
+              {new Date(lastTradeDate).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+            </span>
+            <span className="text-blue-500/70 text-xs ml-2">— add trades after this date</span>
+          </div>
+        )}
       </div>
 
       {/* Table */}
@@ -474,6 +492,9 @@ export function TradesTable() {
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   Strategy
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  Strike
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   Campaign
@@ -529,6 +550,11 @@ export function TradesTable() {
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-300">{trade.strategy}</div>
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-300">
+                      {trade.legs[0]?.strike ? `$${trade.legs[0].strike}` : '—'}
+                    </div>
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap">
                     {trade.campaignId ? (

@@ -14,6 +14,9 @@ export function campaignPremiumCollected(campaign: Campaign, trades: Trade[]): n
     .filter(t => t.campaignId === campaign.id && t.tradeRole &&
       ['csp', 'cc', 'roll', 'short_call'].includes(t.tradeRole))
     .reduce((sum, t) => {
+      const leg = t.legs[0];
+      const isStock = leg?.type === 'stock' || t.strategy.toLowerCase() === 'stock';
+      if (isStock) return sum;
       const gross = t.entryPrice * t.quantity * 100;
       const fee = t.fee ?? 0;
       return sum + gross - fee;
@@ -62,7 +65,14 @@ export function pmccACB(campaign: Campaign, trades: Trade[]): number | null {
  */
 export function campaignNetPL(campaign: Campaign, trades: Trade[]): number {
   return trades
-    .filter(t => t.campaignId === campaign.id && t.realizedPL != null)
+    .filter(t => {
+      if (t.campaignId !== campaign.id) return false;
+      if (t.status !== 'closed') return false;
+      if (t.realizedPL == null) return false;
+      const leg = t.legs[0];
+      const isStock = leg?.type === 'stock' || t.strategy.toLowerCase() === 'stock';
+      return !isStock;
+    })
     .reduce((sum, t) => sum + (t.realizedPL ?? 0), 0);
 }
 

@@ -12,9 +12,10 @@ import {
 interface WheelCampaignCardProps {
   campaign: Campaign;
   trades: Trade[];
+  onComplete: (campaign: Campaign) => void;
 }
 
-export function WheelCampaignCard({ campaign, trades }: WheelCampaignCardProps) {
+export function WheelCampaignCard({ campaign, trades, onComplete }: WheelCampaignCardProps) {
   const campaignTrades = trades.filter(t => t.campaignId === campaign.id);
   const premium = campaignPremiumCollected(campaign, campaignTrades);
   const acb = wheelACB(campaign, campaignTrades);
@@ -141,12 +142,22 @@ export function WheelCampaignCard({ campaign, trades }: WheelCampaignCardProps) 
       {/* Trades link */}
       <div className="flex items-center justify-between pt-3 border-t border-gray-700">
         <span className="text-xs text-gray-500">{campaign.tradeIds.length} trades in campaign</span>
-        <Link
-          to={`/trades?ticker=${campaign.ticker}`}
-          className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
-        >
-          View trades →
-        </Link>
+        <div className="flex items-center gap-3">
+          {!isCompleted && (
+            <button
+              onClick={() => onComplete(campaign)}
+              className="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition-colors"
+            >
+              Mark Complete
+            </button>
+          )}
+          <Link
+            to={`/trades?ticker=${campaign.ticker}`}
+            className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+          >
+            View trades →
+          </Link>
+        </div>
       </div>
     </div>
   );

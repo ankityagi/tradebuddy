@@ -7,14 +7,22 @@ import { inferTradeRole } from '../domain/campaigns';
 import { CampaignLinkBanner } from './CampaignLinkBanner';
 import type { CampaignDecision } from './CampaignLinkBanner';
 
+// Infer buy/sell from parsed trade fields
+function inferSide(parsed: ParsedTrade): 'buy' | 'sell' {
+  if (parsed.action === 'sell') return 'sell';
+  if (parsed.action === 'buy') return 'buy';
+  if (parsed.symbol?.startsWith('-')) return 'sell';
+  if (parsed.amountSign === '+') return 'sell';
+  return 'buy';
+}
+
 // Convert ParsedTrade to CreateTradeInput
-function parsedToTradeInput(parsed: ParsedTrade): CreateTradeInput | null {
+function parsedToTradeInput(parsed: ParsedTrade, effectiveSide: 'buy' | 'sell'): CreateTradeInput | null {
   if (!parsed.ticker || !parsed.type || parsed.strike === null) {
     return null;
   }
 
-  // Determine side: sell if action is 'sell' or if contracts are negative (selling)
-  const side: LegSide = parsed.action === 'sell' ? 'sell' : 'buy';
+  const side: LegSide = effectiveSide;
 
   // Determine strategy based on side and type
   let strategy: Strategy = 'singleOption';
@@ -62,23 +70,24 @@ export function PastePanel() {
   const [campaignTrades, setCampaignTrades] = useState<Trade[]>([]);
   // Per-parsed-trade campaign decisions (keyed by index)
   const [decisions, setDecisions] = useState<Record<number, CampaignDecision>>({});
+  // Per-parsed-trade side overrides (keyed by index)
+  const [sideOverrides, setSideOverrides] = useState<Record<number, 'buy' | 'sell'>>({});
+
+  const lastTradeDate = campaignTrades.length > 0
+    ? campaignTrades.reduce((latest, t) =>
+        new Date(t.createdAt) > new Date(latest) ? t.createdAt : latest,
+        campaignTrades[0].createdAt
+      )
+    : null;
 
   useEffect(() => {
     getActiveCampaigns().then(setActiveCampaigns).catch(() => {});
     getAllTrades().then(setCampaignTrades).catch(() => {});
   }, []);
 
-  function getInferredRole(trade: ParsedTrade): Trade['tradeRole'] {
+  function getInferredRole(trade: ParsedTrade, index: number): Trade['tradeRole'] {
     const optionType = trade.type === 'call' ? 'call' : 'put';
-    // Infer side from action, symbol prefix ('-' = short/sell), or amountSign ('+' = credit received = sell)
-    let side: 'buy' | 'sell' = 'buy';
-    if (trade.action === 'sell') {
-      side = 'sell';
-    } else if (trade.symbol?.startsWith('-')) {
-      side = 'sell';
-    } else if (trade.amountSign === '+') {
-      side = 'sell';
-    }
+    const side = sideOverrides[index] ?? inferSide(trade);
     let dte: number | undefined;
     if (trade.expiry) {
       const days = Math.ceil((new Date(trade.expiry).getTime() - Date.now()) / 86400000);
@@ -112,10 +121,12 @@ export function PastePanel() {
     setHasError(false);
     setSaveError(null);
     setDecisions({});
+    setSideOverrides({});
   };
 
   const onSaveTrade = async (parsedTrade: ParsedTrade, index: number) => {
-    const tradeInput = parsedToTradeInput(parsedTrade);
+    const effectiveSide = sideOverrides[index] ?? inferSide(parsedTrade);
+    const tradeInput = parsedToTradeInput(parsedTrade, effectiveSide);
     if (!tradeInput) {
       setSaveError('Cannot save trade: missing required fields (ticker, type, or strike)');
       return;
@@ -130,12 +141,20 @@ export function PastePanel() {
       let tradeRole: Trade['tradeRole'];
 
       if (decision?.action === 'new') {
+        // Determine initial phase based on the role being added
+        let initialPhase: Campaign['phase'];
+        if (decision.type === 'wheel') {
+          initialPhase = decision.role === 'cc' ? 'selling_calls' : 'selling_puts';
+        } else {
+          initialPhase = decision.role === 'short_call' ? 'selling_calls' : 'leaps_open';
+        }
+
         // Create a new campaign then link the trade
         const newCampaign = await createCampaign({
           ticker: parsedTrade.ticker!,
           type: decision.type,
           status: 'active',
-          phase: decision.type === 'wheel' ? 'selling_puts' : 'leaps_open',
+          phase: initialPhase,
           tradeIds: [],
           leapsCost: decision.type === 'pmcc' ? (parsedTrade.price ?? undefined) : undefined,
           leapsStrike: decision.type === 'pmcc' ? (parsedTrade.strike ?? undefined) : undefined,
@@ -165,8 +184,9 @@ export function PastePanel() {
           if (!campaign.tradeIds.includes(savedTrade.id)) {
             campaign.tradeIds = [...campaign.tradeIds, savedTrade.id];
           }
-          // Advance wheel phase when a CC is linked to an assigned campaign
-          if (campaign.type === 'wheel' && tradeRole === 'cc' && campaign.phase === 'assigned') {
+          // Advance wheel phase when a CC is added
+          if (campaign.type === 'wheel' && tradeRole === 'cc' &&
+              (campaign.phase === 'assigned' || campaign.phase === 'selling_puts')) {
             campaign.phase = 'selling_calls';
           }
           await updateCampaign(campaign);
@@ -187,12 +207,22 @@ export function PastePanel() {
       <h2 className="text-2xl font-bold text-gray-800 mb-6">Paste Trade Confirmation</h2>
 
       {/* Instructions */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
         <p className="text-blue-800 text-sm">
           Copy and paste your broker trade confirmation text below. Supported formats include
           Schwab-style confirmations with option symbols, expiry dates, and transaction details.
         </p>
       </div>
+
+      {lastTradeDate && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg mb-6">
+          <span className="text-blue-600 text-xs font-medium uppercase tracking-wide">Last trade entered:</span>
+          <span className="text-blue-700 font-semibold text-sm">
+            {new Date(lastTradeDate).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+          </span>
+          <span className="text-blue-400 text-xs ml-2">— paste trades after this date</span>
+        </div>
+      )}
 
       {/* Paste Input Card */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
@@ -260,7 +290,8 @@ $0.65"
           )}
 
           {parsed.map((trade, index) => {
-            const inferredRole = getInferredRole(trade);
+            const effectiveSide = sideOverrides[index] ?? inferSide(trade);
+            const inferredRole = getInferredRole(trade, index);
             const activeCampaign = getActiveCampaignForTrade(trade);
             const decision = decisions[index];
             return (
@@ -276,6 +307,36 @@ $0.65"
                 >
                   {saving ? 'Saving...' : 'Add Trade'}
                 </button>
+              </div>
+
+              {/* Buy / Sell toggle */}
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Action:</span>
+                <button
+                  type="button"
+                  onClick={() => setSideOverrides(prev => ({ ...prev, [index]: 'sell' }))}
+                  className={`px-3 py-1 rounded-lg text-sm font-semibold border transition-colors ${
+                    effectiveSide === 'sell'
+                      ? 'bg-green-600 border-green-500 text-white'
+                      : 'bg-white border-gray-300 text-gray-500 hover:border-gray-400'
+                  }`}
+                >
+                  Sold (credit)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSideOverrides(prev => ({ ...prev, [index]: 'buy' }))}
+                  className={`px-3 py-1 rounded-lg text-sm font-semibold border transition-colors ${
+                    effectiveSide === 'buy'
+                      ? 'bg-blue-600 border-blue-500 text-white'
+                      : 'bg-white border-gray-300 text-gray-500 hover:border-gray-400'
+                  }`}
+                >
+                  Bought (debit)
+                </button>
+                {sideOverrides[index] == null && (
+                  <span className="text-xs text-gray-400 italic">auto-detected</span>
+                )}
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {trade.ticker && (
@@ -364,7 +425,7 @@ $0.65"
                 )}
               </div>
 
-              {/* Campaign banner — show if undecided */}
+              {/* Campaign section */}
               {decision == null ? (
                 <CampaignLinkBanner
                   ticker={trade.ticker || ''}
@@ -373,7 +434,17 @@ $0.65"
                   campaignTrades={campaignTrades}
                   onDecide={(d) => setDecisions(prev => ({ ...prev, [index]: d }))}
                 />
-              ) : decision.action !== 'skip' && (
+              ) : decision.action === 'skip' ? (
+                <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
+                  <span className="text-gray-400">No campaign linked.</span>
+                  <button
+                    onClick={() => setDecisions(prev => { const n = { ...prev }; delete n[index]; return n; })}
+                    className="text-blue-500 hover:text-blue-400 underline"
+                  >
+                    Link to campaign
+                  </button>
+                </div>
+              ) : (
                 <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
                   {decision.action === 'new'
@@ -381,7 +452,7 @@ $0.65"
                     : `Will link to existing campaign`}
                   <button
                     onClick={() => setDecisions(prev => { const n = { ...prev }; delete n[index]; return n; })}
-                    className="text-gray-400 hover:text-gray-200 underline ml-1"
+                    className="text-gray-400 hover:text-gray-600 underline ml-1"
                   >
                     change
                   </button>
