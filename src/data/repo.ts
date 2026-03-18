@@ -27,8 +27,11 @@ function getSpreadsheetId(): string {
 /**
  * Parse option type from type field
  */
-function parseOptionType(type: string): 'call' | 'put' {
+function parseOptionType(type: string): 'call' | 'put' | 'stock' {
   const typeLower = type.toLowerCase();
+  if (typeLower === 'stock' || typeLower === 'stock buy' || typeLower === 'stock sell') {
+    return 'stock';
+  }
   if (typeLower.includes('call') || typeLower === 'cc') {
     return 'call';
   }
@@ -44,7 +47,8 @@ function parseSide(type: string): 'buy' | 'sell' {
   if (typeLower === 'csp' || typeLower === 'cc') {
     return 'sell';
   }
-  if (typeLower.includes('buy') || typeLower === 'put' || typeLower === 'call') {
+  if (typeLower === 'stock sell') return 'sell';
+  if (typeLower.includes('buy') || typeLower === 'stock' || typeLower === 'put' || typeLower === 'call') {
     return 'buy';
   }
   return 'sell';
@@ -109,9 +113,11 @@ function tradeToSheetTrade(trade: Trade | CreateTradeInput, ticker: string): Omi
   const isCall = leg?.type === 'call';
   const isSell = leg?.side === 'sell';
 
-  // Determine type (CSP, CC, Put, Call)
+  // Determine type (Stock, CSP, CC, Put, Call)
   let type = '';
-  if (isSell) {
+  if (leg?.type === 'stock') {
+    type = isSell ? 'Stock Sell' : 'Stock';
+  } else if (isSell) {
     type = isCall ? 'CC' : 'CSP';
   } else {
     type = isCall ? 'Call' : 'Put';
@@ -442,15 +448,24 @@ export async function linkTradeToCampaign(
   const campaign = await getCampaignById(campaignId);
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
 
-  // Add tradeId if not already present
-  if (!campaign.tradeIds.includes(tradeId)) {
-    campaign.tradeIds = [...campaign.tradeIds, tradeId];
-    await updateCampaign(campaign);
-  }
-
   // Update the trade row with campaignId + tradeRole
   const trade = await getTrade(tradeId);
   if (!trade) throw new Error(`Trade ${tradeId} not found`);
+
+  // If linking a stock assignment, set assignedStrike on the campaign
+  const isStockAssignment = tradeRole === 'assignment' &&
+    (trade.legs[0]?.type === 'stock' || trade.strategy.toLowerCase() === 'stock');
+  if (isStockAssignment && campaign.type === 'wheel') {
+    campaign.assignedStrike = trade.entryPrice;
+    campaign.assignedAt = campaign.assignedAt ?? new Date().toISOString();
+    campaign.phase = 'assigned';
+  }
+
+  // Add tradeId if not already present
+  if (!campaign.tradeIds.includes(tradeId)) {
+    campaign.tradeIds = [...campaign.tradeIds, tradeId];
+  }
+  await updateCampaign(campaign);
 
   await updateTrade(tradeId, {
     campaignId,

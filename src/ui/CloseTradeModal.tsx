@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Trade } from '../domain/types';
-import { closeTrade } from '../data/repo';
+import { closeTrade, createTrade, getCampaignById, updateCampaign } from '../data/repo';
 
 interface CloseTradeModalProps {
   trade: Trade;
@@ -8,7 +8,7 @@ interface CloseTradeModalProps {
   onComplete: () => void;
 }
 
-type CloseMethod = 'expired' | 'bought_to_close';
+type CloseMethod = 'expired' | 'bought_to_close' | 'assigned';
 
 function isCreditPosition(trade: Trade): boolean {
   const strategy = trade.strategy.toLowerCase();
@@ -21,17 +21,24 @@ function isCreditPosition(trade: Trade): boolean {
 }
 
 export function CloseTradeModal({ trade, onClose, onComplete }: CloseTradeModalProps) {
-  const isCredit = isCreditPosition(trade);
-  const [closeMethod, setCloseMethod] = useState<CloseMethod>(isCredit ? 'expired' : 'bought_to_close');
+  const autoIsCredit = isCreditPosition(trade);
+  const [positionType, setPositionType] = useState<'credit' | 'debit'>(autoIsCredit ? 'credit' : 'debit');
+  const isCredit = positionType === 'credit';
+  const [closeMethod, setCloseMethod] = useState<CloseMethod>(autoIsCredit ? 'expired' : 'bought_to_close');
   const [exitPrice, setExitPrice] = useState<number>(0);
+  const [assignmentPrice, setAssignmentPrice] = useState<number>(0);
   const [loading, setLoading] = useState(false);
 
   const multiplier = trade.legs[0]?.type === 'stock' ? 1 : 100;
 
   const fee = trade.fee ?? 0;
 
+  const isPut = trade.legs[0]?.type === 'put' ||
+    trade.strategy.toLowerCase().includes('put') ||
+    trade.strategy.toLowerCase() === 'csp';
+
   const calculateRealizedPL = (): number => {
-    if (closeMethod === 'expired') {
+    if (closeMethod === 'expired' || closeMethod === 'assigned') {
       return trade.entryPrice * trade.quantity * multiplier - fee;
     }
     if (isCredit) {
@@ -41,8 +48,10 @@ export function CloseTradeModal({ trade, onClose, onComplete }: CloseTradeModalP
   };
 
   const realizedPL = calculateRealizedPL();
-  const effectiveExitPrice = closeMethod === 'expired' ? 0 : exitPrice;
-  const canSubmit = closeMethod === 'expired' || exitPrice > 0;
+  const effectiveExitPrice = (closeMethod === 'expired' || closeMethod === 'assigned') ? 0 : exitPrice;
+  const canSubmit = closeMethod === 'expired' ||
+    (closeMethod === 'assigned' && assignmentPrice > 0) ||
+    (closeMethod === 'bought_to_close' && exitPrice > 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,6 +59,36 @@ export function CloseTradeModal({ trade, onClose, onComplete }: CloseTradeModalP
 
     try {
       await closeTrade(trade.id, effectiveExitPrice, realizedPL);
+
+      if (closeMethod === 'assigned' && assignmentPrice > 0) {
+        const sharesQty = trade.quantity * 100;
+        await createTrade({
+          ticker: trade.ticker,
+          strategy: 'stock',
+          legs: [{ type: 'stock', side: 'buy', quantity: sharesQty }],
+          entryPrice: assignmentPrice,
+          quantity: sharesQty,
+          status: 'open',
+          metrics: {},
+          notes: `Assigned from put at $${assignmentPrice}/shr`,
+          campaignId: trade.campaignId,
+          tradeRole: 'assignment',
+        });
+
+        // Update campaign: set assignedStrike and advance phase
+        if (trade.campaignId) {
+          const campaign = await getCampaignById(trade.campaignId);
+          if (campaign && campaign.type === 'wheel') {
+            await updateCampaign({
+              ...campaign,
+              assignedStrike: assignmentPrice,
+              assignedAt: new Date().toISOString(),
+              phase: 'assigned',
+            });
+          }
+        }
+      }
+
       onComplete();
     } catch (error) {
       console.error('Failed to close trade:', error);
@@ -83,8 +122,47 @@ export function CloseTradeModal({ trade, onClose, onComplete }: CloseTradeModalP
 
           <form onSubmit={handleSubmit}>
             <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">Position type</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPositionType('credit');
+                    setCloseMethod('expired');
+                  }}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    isCredit
+                      ? 'bg-green-600 border-green-500 text-white'
+                      : 'bg-gray-800 border-gray-600 text-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  Credit (sold)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPositionType('debit');
+                    setCloseMethod('bought_to_close');
+                  }}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    !isCredit
+                      ? 'bg-blue-600 border-blue-500 text-white'
+                      : 'bg-gray-800 border-gray-600 text-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  Debit (bought)
+                </button>
+              </div>
+              {positionType !== (autoIsCredit ? 'credit' : 'debit') && (
+                <p className="text-xs text-amber-400 mt-1">
+                  Auto-detected as {autoIsCredit ? 'credit' : 'debit'} — overridden. Fix the sheet type to avoid this next time.
+                </p>
+              )}
+            </div>
+
+            <div className="mb-4">
               <label className="block text-sm font-medium text-gray-300 mb-2">How did you close?</label>
-              <div className={`grid gap-2 ${isCredit ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              <div className={`grid gap-2 ${isCredit ? (isPut ? 'grid-cols-3' : 'grid-cols-2') : 'grid-cols-1'}`}>
                 {isCredit && (
                   <button
                     type="button"
@@ -96,6 +174,19 @@ export function CloseTradeModal({ trade, onClose, onComplete }: CloseTradeModalP
                     }`}
                   >
                     Expired Worthless
+                  </button>
+                )}
+                {isCredit && isPut && (
+                  <button
+                    type="button"
+                    onClick={() => setCloseMethod('assigned')}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                      closeMethod === 'assigned'
+                        ? 'bg-orange-600 border-orange-500 text-white'
+                        : 'bg-gray-800 border-gray-600 text-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    Assigned
                   </button>
                 )}
                 <button
@@ -116,6 +207,32 @@ export function CloseTradeModal({ trade, onClose, onComplete }: CloseTradeModalP
               <div className="mb-4 p-3 bg-green-900/30 border border-green-700 rounded text-sm text-green-300">
                 Option expired worthless — premium ${(trade.entryPrice * trade.quantity * multiplier).toFixed(2)}
                 {fee > 0 ? ` − $${fee.toFixed(2)} fee = $${(trade.entryPrice * trade.quantity * multiplier - fee).toFixed(2)} profit` : ' kept as profit'}.
+              </div>
+            )}
+
+            {closeMethod === 'assigned' && (
+              <div className="mb-4 p-3 bg-orange-900/30 border border-orange-700 rounded text-sm text-orange-300 space-y-3">
+                <p>Put was assigned — you keep the premium as profit and acquire {trade.quantity * 100} shares.</p>
+                <div>
+                  <label className="block text-xs font-medium text-orange-200 mb-1">
+                    Assignment price (strike) *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={assignmentPrice || ''}
+                    onChange={(e) => setAssignmentPrice(parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 bg-gray-800 border border-orange-700/50 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 placeholder-gray-500 text-sm"
+                    placeholder="e.g. 41.00"
+                    autoFocus
+                  />
+                </div>
+                {assignmentPrice > 0 && (
+                  <p className="text-xs text-orange-200">
+                    Will create a stock buy trade: {trade.quantity * 100} shares of {trade.ticker} at ${assignmentPrice}/shr
+                    (cost basis ${(assignmentPrice * trade.quantity * 100).toLocaleString()})
+                  </p>
+                )}
               </div>
             )}
 

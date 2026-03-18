@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import type { Campaign, Trade } from '../../domain/types';
-import { getCampaigns, getAllTrades } from '../../data/repo';
+import { getCampaigns, getAllTrades, updateCampaign } from '../../data/repo';
 import { WheelCampaignCard } from './WheelCampaignCard';
 import { PMCCCampaignCard } from './PMCCCampaignCard';
 
@@ -35,6 +35,17 @@ export function StrategiesPage() {
 
   const active = campaigns.filter(c => c.status === 'active');
   const completed = campaigns.filter(c => c.status === 'completed');
+
+  const handleComplete = async (campaign: Campaign) => {
+    const updated: Campaign = {
+      ...campaign,
+      status: 'completed',
+      phase: campaign.type === 'wheel' ? 'exited' : 'closed',
+      completedAt: new Date().toISOString(),
+    };
+    await updateCampaign(updated);
+    setCampaigns(prev => prev.map(c => c.id === updated.id ? updated : c));
+  };
 
   if (loading) {
     return (
@@ -88,7 +99,7 @@ export function StrategiesPage() {
                 Active <span className="text-gray-400 font-normal text-sm">({active.length})</span>
               </h3>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {active.map(c => renderCard(c, trades))}
+                {active.map(c => renderCard(c, trades, handleComplete))}
               </div>
             </section>
           )}
@@ -100,7 +111,7 @@ export function StrategiesPage() {
                 Completed <span className="text-gray-400 font-normal text-sm">({completed.length})</span>
               </h3>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {completed.map(c => renderCard(c, trades))}
+                {completed.map(c => renderCard(c, trades, handleComplete))}
               </div>
             </section>
           )}
@@ -110,9 +121,9 @@ export function StrategiesPage() {
   );
 }
 
-function renderCard(campaign: Campaign, trades: Trade[]) {
+function renderCard(campaign: Campaign, trades: Trade[], onComplete: (c: Campaign) => void) {
   if (campaign.type === 'wheel') {
-    return <WheelCampaignCard key={campaign.id} campaign={campaign} trades={trades} />;
+    return <WheelCampaignCard key={campaign.id} campaign={campaign} trades={trades} onComplete={onComplete} />;
   }
-  return <PMCCCampaignCard key={campaign.id} campaign={campaign} trades={trades} />;
+  return <PMCCCampaignCard key={campaign.id} campaign={campaign} trades={trades} onComplete={onComplete} />;
 }
