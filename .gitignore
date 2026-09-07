@@ -4,3 +4,7 @@ dist/
 *.log
 .env
 .env.local
+
+# BrainPlay games project — lives in its own repo (ankityagi/brainplay-games),
+# not part of tradebuddy. Kept on disk here for convenience during setup.
+/games/
